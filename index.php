@@ -1,0 +1,3 @@
+<?php
+// Landing page
+?>

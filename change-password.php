@@ -1,0 +1,3 @@
+<?php
+// Change password page
+?>
