@@ -11,8 +11,8 @@ function getDBConnection() {
         ];
         return new PDO($dsn, DB_USER, DB_PASS, $options);
     } catch (PDOException $e) {
-        error_log("Database connection failed: " . $e->getMessage());
-        die("Connection failed. Please try again later.");
+        // Show the real error for debugging
+        die("Connection failed: " . $e->getMessage());
     }
 }
 ?>

@@ -1,8 +1,19 @@
 <?php
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'jobbridge');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+// includes/config.php
+
+/**
+ * DATABASE CONFIGURATION
+ * 
+ * Replit provides a built-in PostgreSQL database.
+ * If you are using an external MySQL database, ensure:
+ * 1. The external database allows connections from Replit's IP addresses.
+ * 2. You have configured the correct hostname, username, and password.
+ */
+
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_NAME', getenv('DB_NAME') ?: 'jobbridge');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASS') ?: '');
 
 define('SITE_NAME', 'JobBridge');
 define('SITE_URL', 'http://localhost');

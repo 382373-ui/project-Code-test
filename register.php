@@ -11,7 +11,6 @@ if (isLoggedIn()) {
 }
 
 $errors = [];
-$success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = sanitizeInput($_POST['username'] ?? '');
@@ -58,7 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $db->prepare("INSERT INTO profiles (user_id, first_name, last_name) VALUES (?, ?, ?)");
                 $stmt->execute([$userId, $firstName, $lastName]);
                 
-                $success = 'Registration successful! You can now log in.';
+                // REDIRECT TO LOGIN WITH SUCCESS PARAMETER
+                redirect('login.php?registered=1');
+                exit; 
             } else {
                 $errors[] = 'Registration failed. Please try again.';
             }
@@ -96,10 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                         <?php endif; ?>
                         
-                        <?php if ($success): ?>
-                            <div class="alert alert-success"><?= $success ?></div>
-                        <?php endif; ?>
-                        
                         <form method="POST" action="">
                             <div class="mb-3">
                                 <label for="username" class="form-label">Username</label>
@@ -133,9 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="mb-3">
                                 <label for="password" class="form-label">Password</label>
                                 <input type="password" class="form-control" id="password" name="password" required>
-                                <small class="form-text text-muted">
-                                    At least 8 characters, including uppercase, lowercase, number, and special character.
-                                </small>
                             </div>
                             
                             <div class="mb-3">
@@ -154,7 +148,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
     </div>
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

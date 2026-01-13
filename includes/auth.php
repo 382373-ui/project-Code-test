@@ -1,6 +1,5 @@
-<?php
+<?php  
 require_once 'config.php';
-
 function startSecureSession() {
     if (session_status() === PHP_SESSION_NONE) {
         ini_set('session.cookie_httponly', 1);
@@ -54,9 +53,9 @@ function verifyPassword($password, $hash) {
     return password_verify($password, $hash);
 }
 
-function validatePassword($password) {
-    if (strlen($password) < MIN_PASSWORD_LENGTH) {
-        return "Password must be at least " . MIN_PASSWORD_LENGTH . " characters long.";
+        function validatePassword($password) {
+        if (strlen($password) < 8) { // replace MIN_PASSWORD_LENGTH with 8
+            return "Password must be at least 8 characters long.";
     }
     if (!preg_match('/[A-Z]/', $password)) {
         return "Password must contain at least one uppercase letter.";

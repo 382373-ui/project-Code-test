@@ -16,12 +16,6 @@ startSecureSession();
                     <a class="nav-link" href="jobs.php">Jobs</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="volunteer.php">Volunteer</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="internship.php">Internships</a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link" href="resource-hub.php">Resources</a>
                 </li>
             </ul>

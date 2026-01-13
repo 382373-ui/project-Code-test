@@ -11,6 +11,12 @@ if (isLoggedIn()) {
 }
 
 $error = '';
+$success = '';
+
+// Check if redirected from registration
+if (isset($_GET['registered']) && $_GET['registered'] == 1) {
+    $success = 'Registration successful! Please log in with your credentials.';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = sanitizeInput($_POST['username'] ?? '');
@@ -56,6 +62,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <h3>Login to JobBridge</h3>
                     </div>
                     <div class="card-body">
+                        <?php if ($success): ?>
+                            <div class="alert alert-success"><?= $success ?></div>
+                        <?php endif; ?>
+
                         <?php if ($error): ?>
                             <div class="alert alert-danger"><?= $error ?></div>
                         <?php endif; ?>
@@ -75,14 +85,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </form>
                         
                         <div class="mt-3 text-center">
-                            <p>Don't have an account? <a href="register.php">Register here</a></p>
+                            <p>Don't have an account? <a href="registration.php">Register here</a></p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
