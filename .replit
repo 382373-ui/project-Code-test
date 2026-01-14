@@ -1,6 +1,7 @@
 run = "php -S 0.0.0.0:8000 -t ."
 
 entrypoint = "index.php"
+modules = ["postgresql-16"]
 
 [nix]
 channel = "stable-22_11"
@@ -10,11 +11,11 @@ run = ["php", "-S", "0.0.0.0:8000", "-t", "."]
 deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 8000
+localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 5000
+localPort = 8000
 externalPort = 80
 
 [agent]
