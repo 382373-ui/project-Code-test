@@ -3,10 +3,11 @@ require_once 'config.php';
 
 function getDBConnection() {
     try {
-        $host = getenv('DB_HOST') ?: '127.0.0.1';
-        $dbname = getenv('DB_NAME') ?: 'jobbridge';
-        $user = getenv('DB_USER') ?: 'root';
-        $pass = getenv('DB_PASS') ?: '';
+        // Use the constants defined in config.php
+        $host = DB_HOST;
+        $dbname = DB_NAME;
+        $user = DB_USER;
+        $pass = DB_PASS;
         
         $dsn = "mysql:host=$host;dbname=$dbname;charset=utf8mb4";
         $options = [
