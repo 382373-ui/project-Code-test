@@ -1,91 +1,168 @@
 <?php
+// Make sure THERE IS NOTHING BEFORE THIS LINE (no blank line, no space, no BOM)
+
 require_once 'includes/config.php';
 require_once 'includes/db.php';
 require_once 'includes/auth.php';
 require_once 'includes/functions.php';
 
-startSecureSession();
+$pdo = getDBConnection();
 
-$db = getDBConnection();
+$isLoggedIn = isset($_SESSION['user_id']);
 
-// Fetch some recent jobs (limit 6)
-$stmt = $db->prepare("SELECT j.id, j.title, j.category, j.pay, j.zip_code, j.date_posted, u.username AS poster 
-                      FROM jobs j
-                      JOIN users u ON j.poster_user_id = u.id
-                      WHERE j.is_active = 1
-                      ORDER BY j.date_posted DESC
-                      LIMIT 6");
-$stmt->execute();
-$recentJobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Fetch the 3 most recent active jobs
+$recentJobs = [];
+$error = null;
 
+try {
+    $stmt = $pdo->prepare("
+        SELECT id, title, category, pay, zip_code, location_details, date_posted, description
+        FROM jobs
+        WHERE is_active = 1
+        ORDER BY date_posted DESC
+        LIMIT 3
+    ");
+    $stmt->execute();
+    $recentJobs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $error = "Could not load recent jobs: " . htmlspecialchars($e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JobBridge - Find Jobs for Students</title>
+    <title>About JobBridge</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="public/css/style.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="public/css/style.css" rel="stylesheet"> <!-- if it exists -->
+
+    <style>
+        body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
+        .hero { background-color: #0d6efd; color: white; padding: 5rem 1rem; text-align: center; }
+        .job-card {
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+            border: none;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .job-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+        }
+        .contact-box {
+            background: white;
+            border-radius: 12px;
+            padding: 2.5rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+    </style>
 </head>
 <body>
-    <?php include 'includes/header.php'; ?>
 
-    <!-- Hero Section -->
-    <div class="bg-primary text-white text-center py-5 mb-5">
-        <h1>Welcome to JobBridge</h1>
-        <p>Your student-friendly platform to find jobs, internships, odd jobs, and volunteer work!</p>
-        <?php if (!isLoggedIn()): ?>
-            <a href="register.php" class="btn btn-light btn-lg me-2">Register</a>
-            <a href="login.php" class="btn btn-outline-light btn-lg">Login</a>
-        <?php endif; ?>
+<?php include 'includes/header.php'; ?>
+
+<!-- Hero -->
+<div class="hero mb-5">
+    <div class="container">
+        <h1 class="display-4 fw-bold">About JobBridge</h1>
+        <p class="lead mt-3">
+            JobBridge is a student-focused platform connecting young people with meaningful opportunities — 
+            from part-time jobs and internships to odd jobs and volunteer positions in your local area.
+        </p>
+    </div>
+</div>
+
+<div class="container mb-5">
+
+    <!-- About content -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-8">
+            <h2 class="mb-4 text-center">What We Do</h2>
+            <p class="lead">
+                We created JobBridge because students often struggle to find flexible, local work that fits around classes, 
+                extracurriculars, and life. Whether you're looking for:
+            </p>
+            <ul class="list-group list-group-flush mb-4 fs-5">
+                <li class="list-group-item"><strong>Company Jobs</strong> – retail, cafes, warehouses, offices</li>
+                <li class="list-group-item"><strong>Odd Jobs</strong> – lawn care, moving help, pet sitting, small tasks</li>
+                <li class="list-group-item"><strong>Internships</strong> – gain real experience in your field of interest</li>
+                <li class="list-group-item"><strong>Volunteer Work</strong> – give back to your community</li>
+            </ul>
+            <p class="lead">…we aim to make it easy to discover opportunities posted by people and businesses near you.</p>
+        </div>
     </div>
 
-    <div class="container">
-        <!-- Search Jobs -->
-        <div class="mb-5">
-            <h3 class="mb-3">Search Jobs</h3>
-            <form action="jobs.php" method="GET" class="row g-2">
-                <div class="col-md-4">
-                    <input type="text" name="keyword" class="form-control" placeholder="Job title or keyword">
-                </div>
-                <div class="col-md-2">
-                    <input type="text" name="zip" class="form-control" placeholder="ZIP code">
-                </div>
-                <div class="col-md-2">
-                    <select name="category" class="form-select">
-                        <option value="">All Categories</option>
-                        <option value="company">Company Jobs</option>
-                        <option value="odd">Odd Jobs</option>
-                        <option value="volunteer">Volunteer</option>
-                        <option value="internship">Internship</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <input type="number" name="pay_min" class="form-control" placeholder="Min Pay">
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Search</button>
-                </div>
-            </form>
-        </div>
+    <!-- Recent jobs -->
+    <h2 class="mb-4 text-center">Latest Opportunities</h2>
 
-        <!-- Featured Categories -->
-        <div class="mb-5">
-            <h3 class="mb-3">Featured Categories</h3>
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <a href="jobs.php?category=company" class="text-decoration-none">
-                        <div class="card text-center">
-                            <div class="card-body">
-                                <h5 class="card-title">Company Jobs</h5>
-                                <p class="card-text">Find local company and store jobs.</p>
+    <?php if ($error): ?>
+        <div class="alert alert-danger"><?= $error ?></div>
+    <?php elseif (empty($recentJobs)): ?>
+        <div class="alert alert-info text-center py-4">
+            No recent jobs available at the moment. Check back soon!
+        </div>
+    <?php else: ?>
+        <div class="row g-4">
+            <?php foreach ($recentJobs as $job): ?>
+                <div class="col-md-4">
+                    <div class="card job-card h-100 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary fw-semibold"><?= htmlspecialchars($job['title']) ?></h5>
+                            <p class="text-muted small mb-3">
+                                <i class="bi bi-calendar-event me-1"></i>
+                                <?= date('M j, Y', strtotime($job['date_posted'])) ?>
+                            </p>
+                            <div class="mb-2">
+                                <strong>Category:</strong> <?= ucfirst(htmlspecialchars($job['category'])) ?>
                             </div>
+                            <div class="mb-2">
+                                <strong>Location:</strong> 
+                                <?= htmlspecialchars($job['location_details'] ?: 'Not specified') ?>
+                                <span class="text-muted">(<?= htmlspecialchars($job['zip_code']) ?>)</span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Pay:</strong> 
+                                <?php if ($job['pay'] > 0): ?>
+                                    $<?= number_format($job['pay'], 2) ?>
+                                <?php else: ?>
+                                    Volunteer / Unpaid
+                                <?php endif; ?>
+                            </div>
+                            <p class="card-text text-secondary">
+                                <?= nl2br(htmlspecialchars(substr(trim($job['description']), 0, 110))) ?>…
+                            </p>
                         </div>
-                    </a>
+                        <div class="card-footer bg-white border-0 pt-0">
+                            <a href="jobs.php" class="btn btn-outline-primary btn-sm">View all jobs →</a>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <a href="jobs.php?category=odd" class="text-decoration-none">
-                        <div class="card text-center">
-                            <div class="card-body">
-                                <h5 class="card-title">Odd Jobs</h5>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- Contact -->
+    <div class="row justify-content-center mt-5">
+        <div class="col-lg-6 col-md-8">
+            <div class="contact-box text-center">
+                <h3 class="mb-4">Get in Touch</h3>
+                <p class="lead mb-4">
+                    Questions, suggestions, or want to report something?<br>
+                    We'd love to hear from you.
+                </p>
+                <a href="mailto:contact@jobbridge.example.com" class="btn btn-primary btn-lg px-4">
+                    <i class="bi bi-envelope-fill me-2"></i> contact@jobbridge.example.com
+                </a>
+                <p class="mt-3 text-muted small">
+                    (change to your real email address)
+                </p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

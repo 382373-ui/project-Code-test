@@ -1,8 +1,8 @@
-<?php
+<?php 
+require_once 'auth.php';
 if (!function_exists('isLoggedIn')) {
     require_once __DIR__ . '/auth.php';
 }
-startSecureSession();
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container">

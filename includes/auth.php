@@ -1,16 +1,16 @@
-<?php  
-require_once 'config.php';
-function startSecureSession() {
-    if (session_status() === PHP_SESSION_NONE) {
-        ini_set('session.cookie_httponly', 1);
-        ini_set('session.use_only_cookies', 1);
-        ini_set('session.cookie_secure', 0);
-        session_start();
-    }
+<?php
+// Start session safely BEFORE anything else
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_secure', 0);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
+/* ---------- AUTH HELPERS ---------- */
+
 function isLoggedIn() {
-    startSecureSession();
     return isset($_SESSION['user_id']) && isset($_SESSION['username']);
 }
 
@@ -23,7 +23,7 @@ function requireLogin() {
 
 function requireAdmin() {
     requireLogin();
-    if ($_SESSION['role'] !== 'admin') {
+    if (($_SESSION['role'] ?? '') !== 'admin') {
         header('Location: index.php');
         exit;
     }
@@ -38,12 +38,13 @@ function getCurrentUserRole() {
 }
 
 function logout() {
-    startSecureSession();
     $_SESSION = [];
     session_destroy();
     header('Location: index.php');
     exit;
 }
+
+/* ---------- PASSWORD HELPERS ---------- */
 
 function hashPassword($password) {
     return password_hash($password, PASSWORD_BCRYPT);
@@ -53,9 +54,9 @@ function verifyPassword($password, $hash) {
     return password_verify($password, $hash);
 }
 
-        function validatePassword($password) {
-        if (strlen($password) < 8) { // replace MIN_PASSWORD_LENGTH with 8
-            return "Password must be at least 8 characters long.";
+function validatePassword($password) {
+    if (strlen($password) < 8) {
+        return "Password must be at least 8 characters long.";
     }
     if (!preg_match('/[A-Z]/', $password)) {
         return "Password must contain at least one uppercase letter.";
@@ -71,4 +72,3 @@ function verifyPassword($password, $hash) {
     }
     return true;
 }
-?>

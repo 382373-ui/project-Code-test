@@ -4,7 +4,61 @@ require_once 'includes/config.php';
 require_once 'includes/db.php';
 require_once 'includes/auth.php'; 
 
-requireLogin();
+$isLoggedIn = isset($_SESSION['user_id']);
+$pdo = getDBConnection();
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['job_id'])) {
+
+    if (!$isLoggedIn) {
+        http_response_code(403);
+        echo json_encode(['error' => 'login_required']);
+        exit;
+    }
+
+    $jobId = (int) $_POST['job_id'];
+
+    // Check job is active
+    $stmt = $pdo->prepare(
+        "SELECT is_active FROM jobs WHERE id = ?"
+    );
+    $stmt->execute([$jobId]);
+    $job = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$job || (int)$job['is_active'] !== 1) {
+        echo json_encode([
+            'error' => 'inactive',
+            'disabled' => true
+        ]);
+        exit;
+    }
+
+    // Check if saved
+    $stmt = $pdo->prepare(
+        "SELECT 1 FROM saved_jobs
+         WHERE user_id = ? AND job_id = ?"
+    );
+    $stmt->execute([$_SESSION['user_id'], $jobId]);
+    $isSaved = $stmt->fetchColumn();
+
+    if ($isSaved) {
+        $stmt = $pdo->prepare(
+            "DELETE FROM saved_jobs
+             WHERE user_id = ? AND job_id = ?"
+        );
+        $stmt->execute([$_SESSION['user_id'], $jobId]);
+
+        echo json_encode(['saved' => false]);
+    } else {
+        $stmt = $pdo->prepare(
+            "INSERT INTO saved_jobs (user_id, job_id, created_at)
+             VALUES (?, ?, NOW())"
+        );
+        $stmt->execute([$_SESSION['user_id'], $jobId]);
+
+        echo json_encode(['saved' => true]);
+    }
+    exit;
+}
 
 // Initialize search variables
 $search_title = $_GET['title'] ?? '';  
@@ -18,13 +72,15 @@ $categories = ['company','odd','volunteer','internship']; // ENUM values
 $error_message = '';
 
 try {
-    $pdo = getDBConnection();
-
     // --- Handle Job Search ---
-    $sql = "SELECT id, title, description, category, pay, zip_code, location_details, date_posted, date_needed
-            FROM jobs 
-            WHERE is_active = 1"; 
-    $params = [];
+    $sql = "SELECT id, title, description, category, pay, zip_code, 
+           is_active, location_details, date_posted, date_needed,
+           poster_user_id
+    FROM jobs 
+    WHERE 1=1";
+
+$params = [];
+
 
     if (!empty($search_title)) {
         $sql .= " AND title LIKE ?";
@@ -53,11 +109,15 @@ try {
     $jobs = $stmt_jobs->fetchAll(PDO::FETCH_ASSOC);
 
     // --- Get saved jobs for this user ---
-    $stmt = $pdo->prepare(
-        "SELECT job_id FROM saved_jobs WHERE user_id = ?"
-    );
-    $stmt->execute([$_SESSION['user_id']]);
-    $savedJobIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $savedJobIds = [];
+
+    if ($isLoggedIn) {
+        $stmt = $pdo->prepare(
+            "SELECT job_id FROM saved_jobs WHERE user_id = ?"
+        );
+        $stmt->execute([$_SESSION['user_id']]);
+        $savedJobIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
 
 } catch (PDOException $e) {
     $error_message = "An error occurred while fetching data: " . $e->getMessage();
@@ -89,9 +149,16 @@ try {
             font-size: 22px;
             color: #ccc;
         }
+
         .bookmark.saved {
             color: #555;
         }
+
+        .bookmark.disabled {
+            cursor: not-allowed;
+            color: #bbb;
+        }
+
     </style>
 </head>
 <body>
@@ -138,11 +205,46 @@ try {
                 <div class="d-flex justify-content-between align-items-start">
                     <h3><?= htmlspecialchars($job['title']) ?></h3>
 
-                    <i
-                        class="bi <?= in_array($job['id'], $savedJobIds) ? 'bi-bookmark-fill saved' : 'bi-bookmark' ?> bookmark"
-                        data-job-id="<?= $job['id'] ?>"
-                        title="<?= in_array($job['id'], $savedJobIds) ? 'Remove from saved' : 'Save job' ?>"
-                    ></i>
+                    <?php if ($isLoggedIn): ?>
+    <?php
+    $receiver = ($job['poster_user_id'] == $_SESSION['user_id'])
+        ? 0   // poster must choose conversation from list later
+        : $job['poster_user_id'];
+    ?>
+
+    <?php if ($job['poster_user_id'] != $_SESSION['user_id']): ?>
+        <a href="chat.php?user_id=<?= $job['poster_user_id'] ?>&job_id=<?= $job['id'] ?>"
+           class="btn btn-sm btn-primary me-2">
+           <i class="bi bi-chat-dots"></i> Message
+        </a>
+
+    <?php endif; ?> 
+
+                        <!-- Bookmark Icon -->
+                        <i class="bookmark bi 
+                            <?php
+                                if (!$job['is_active']) {
+                                    echo 'bi-bookmark-x disabled';
+                                } elseif (in_array($job['id'], $savedJobIds)) {
+                                    echo 'bi-bookmark-fill saved';
+                                } else {
+                                    echo 'bi-bookmark';
+                                }
+                            ?>" 
+                            data-job-id="<?= $job['id'] ?>"
+                            title="<?php
+                                if (!$job['is_active']) {
+                                    echo 'Job no longer available';
+                                } elseif (in_array($job['id'], $savedJobIds)) {
+                                    echo 'Remove from saved';
+                                } else {
+                                    echo 'Save job';
+                                }
+                            ?>"
+                        ></i>
+                    <?php else: ?>
+                        <span class="text-muted small">Login to save</span>
+                    <?php endif; ?>
                 </div>
 
                 <p class="mb-2 text-muted">
@@ -159,52 +261,63 @@ try {
                         <span class="text-muted">Unpaid / Volunteer</span>
                     <?php endif; ?>
                 </p>
-                
+
                 <p><strong>Location:</strong> <?= htmlspecialchars($job['location_details']) ?> (ZIP: <?= htmlspecialchars($job['zip_code']) ?>)</p>
-                
+
                 <hr>
                 <p><?= nl2br(htmlspecialchars($job['description'])) ?></p>
             </div>
         <?php endforeach; ?>
     </div>
     <?php elseif (!empty($_GET) && empty($jobs) && empty($error_message)): ?>
-    <div style="margin-top: 30px; padding: 15px; background-color: #f8f9fa; border-radius: 4px; text-align:center;">
-        <p>No jobs found matching your criteria.</p>
-    </div>
+        <div style="margin-top: 30px; padding: 15px; background-color: #f8f9fa; border-radius: 4px; text-align:center;">
+            <p>No jobs found matching your criteria.</p>
+        </div>
     <?php endif; ?>
 
-</div>
+    <?php if ($isLoggedIn): ?>
+    <script>
+        document.querySelectorAll('.bookmark').forEach(icon => {
+            icon.addEventListener('click', function () {
+                if (this.classList.contains('disabled')) return;
 
-<script>
-document.querySelectorAll('.bookmark').forEach(icon => {
-    icon.addEventListener('click', function () {
-        const jobId = this.dataset.jobId;
+                const jobId = this.dataset.jobId;
 
-        fetch('saved_job.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'job_id=' + jobId
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.error === 'inactive') {
-                alert('This job is no longer active and cannot be saved.');
-                return;
-            }
+                fetch('jobs.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'job_id=' + jobId
+                })
+                .then(res => res.json())
+                .then(data => {
+                    this.classList.remove(
+                        'bi-bookmark',
+                        'bi-bookmark-fill',
+                        'bi-bookmark-x',
+                        'saved'
+                    );
 
-            if (data.saved) {
-                this.classList.remove('bi-bookmark');
-                this.classList.add('bi-bookmark-fill', 'saved');
-                this.title = 'Remove from saved';
-            } else {
-                this.classList.remove('bi-bookmark-fill', 'saved');
-                this.classList.add('bi-bookmark');
-                this.title = 'Save job';
-            }
+                    if (data.disabled) {
+                        this.classList.add('bi-bookmark-x', 'disabled');
+                        this.title = 'Job no longer available';
+                        return;
+                    }
+
+                    if (data.saved) {
+                        this.classList.add('bi-bookmark-fill', 'saved');
+                        this.title = 'Remove from saved';
+                    } else {
+                        this.classList.add('bi-bookmark');
+                        this.title = 'Save job';
+                    }
+                });
+            });
         });
-    });
-});
-</script>
+
+
+    </script>
+    <?php endif; ?>
+
 
 </body>
 </html>
