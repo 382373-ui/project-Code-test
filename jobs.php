@@ -2,7 +2,7 @@
 // Include necessary files
 require_once 'includes/config.php';
 require_once 'includes/db.php';
-require_once 'includes/auth.php'; 
+require_once 'includes/auth.php';
 
 $isLoggedIn = isset($_SESSION['user_id']);
 $pdo = getDBConnection();
@@ -61,7 +61,7 @@ $pdo = getDBConnection();
 }
 
 // Initialize search variables
-$search_title = $_GET['title'] ?? '';  
+$search_title = $_GET['title'] ?? '';
 $search_zip = $_GET['zip'] ?? '';
 $search_category = $_GET['category'] ?? 'All';
 $search_min_pay = $_GET['min_pay'] ?? '';
@@ -73,10 +73,10 @@ $error_message = '';
 
 try {
     // --- Handle Job Search ---
-    $sql = "SELECT id, title, description, category, pay, zip_code, 
+    $sql = "SELECT id, title, description, category, pay, zip_code,
            is_active, location_details, date_posted, date_needed,
            poster_user_id
-    FROM jobs 
+    FROM jobs
     WHERE 1=1";
 
 $params = [];
@@ -158,20 +158,26 @@ $params = [];
             cursor: not-allowed;
             color: #bbb;
         }
-
+        .ad-slot {
+            background: #f0f0f0;
+            padding: 10px;
+            border: 1px dashed #ccc;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
 
 <?php include 'includes/header.php'; ?>
-    
+
 <div class="header-bar">
     <h1>Welcome to JobBridge</h1>
     <p>Your student-friendly platform to find jobs, internships, odd jobs, and volunteer work!</p>
 </div>
 
 <div class="container">
-    
+
     <?php if ($error_message): ?>
         <div class="alert alert-danger"><?= htmlspecialchars($error_message) ?></div>
     <?php endif; ?>
@@ -181,11 +187,11 @@ $params = [];
         <form action="jobs.php" method="GET" class="search-form">
             <input type="text" name="title" placeholder="Job title or keyword" value="<?= htmlspecialchars($search_title) ?>">
             <input type="text" name="zip" placeholder="ZIP code" value="<?= htmlspecialchars($search_zip) ?>" style="width: 150px;">
-            
+
             <select name="category" style="width: 200px;">
                 <option value="All">All Categories</option>
                 <?php foreach ($categories as $category): ?>
-                    <option value="<?= htmlspecialchars($category) ?>" 
+                    <option value="<?= htmlspecialchars($category) ?>"
                         <?= ($search_category === $category) ? 'selected' : '' ?>>
                         <?= ucfirst($category) ?>
                     </option>
@@ -197,10 +203,18 @@ $params = [];
         </form>
     </div>
 
+    <!-- Ad: 728x90 Leaderboard -->
+    <div class="ad-slot text-center my-3">
+        <small>Advertisement</small><br>
+        <div style="height: 90px; background: #eee; display: flex; align-items: center; justify-content: center;">
+            <span style="color: #999;">728x90 Ad Space</span>
+        </div>
+    </div>
+
     <?php if (!empty($jobs)): ?>
     <div style="margin-top: 30px;">
         <h2>Latest Jobs</h2>
-        <?php foreach ($jobs as $job): ?>
+        <?php foreach ($jobs as $i => $job): ?>
             <div class="job-listing">
                 <div class="d-flex justify-content-between align-items-start">
                     <h3><?= htmlspecialchars($job['title']) ?></h3>
@@ -218,10 +232,10 @@ $params = [];
            <i class="bi bi-chat-dots"></i> Message
         </a>
 
-    <?php endif; ?> 
+    <?php endif; ?>
 
                         <!-- Bookmark Icon -->
-                        <i class="bookmark bi 
+                        <i class="bookmark bi
                             <?php
                                 if (!$job['is_active']) {
                                     echo 'bi-bookmark-x disabled';
@@ -230,7 +244,8 @@ $params = [];
                                 } else {
                                     echo 'bi-bookmark';
                                 }
-                            ?>" 
+                            ?>
+                            "
                             data-job-id="<?= $job['id'] ?>"
                             title="<?php
                                 if (!$job['is_active']) {
@@ -240,7 +255,8 @@ $params = [];
                                 } else {
                                     echo 'Save job';
                                 }
-                            ?>"
+                            ?>
+                            "
                         ></i>
                     <?php else: ?>
                         <span class="text-muted small">Login to save</span>
@@ -254,7 +270,7 @@ $params = [];
                     <?php endif; ?>
                 </p>
 
-                <p><strong>Pay:</strong> 
+                <p><strong>Pay:</strong>
                     <?php if ($job['pay'] > 0): ?>
                         $<?= htmlspecialchars(number_format($job['pay'], 2)) ?>
                     <?php else: ?>
@@ -267,6 +283,17 @@ $params = [];
                 <hr>
                 <p><?= nl2br(htmlspecialchars($job['description'])) ?></p>
             </div>
+
+            <!-- Ad: 300x250 Medium Rectangle (every 3rd job) -->
+            <?php if ($i % 3 === 2): ?>
+            <div class="ad-slot text-center my-3">
+                <small>Advertisement</small><br>
+                <div style="height: 250px; background: #eee; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: #999;">300x250 Ad Space</span>
+                </div>
+            </div>
+            <?php endif; ?>
+
         <?php endforeach; ?>
     </div>
     <?php elseif (!empty($_GET) && empty($jobs) && empty($error_message)): ?>
@@ -313,11 +340,8 @@ $params = [];
                 });
             });
         });
-
-
     </script>
     <?php endif; ?>
-
-
+</div>
 </body>
 </html>

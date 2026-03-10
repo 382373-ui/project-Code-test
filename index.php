@@ -1,13 +1,11 @@
 <?php
 // Make sure THERE IS NOTHING BEFORE THIS LINE (no blank line, no space, no BOM)
-
 require_once 'includes/config.php';
 require_once 'includes/db.php';
 require_once 'includes/auth.php';
 require_once 'includes/functions.php';
 
 $pdo = getDBConnection();
-
 $isLoggedIn = isset($_SESSION['user_id']);
 
 // Fetch the 3 most recent active jobs
@@ -36,8 +34,7 @@ try {
     <title>About JobBridge</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="public/css/style.css" rel="stylesheet"> <!-- if it exists -->
-
+    <link href="public/css/style.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
         .hero { background-color: #0d6efd; color: white; padding: 5rem 1rem; text-align: center; }
@@ -57,10 +54,16 @@ try {
             padding: 2.5rem;
             box-shadow: 0 4px 16px rgba(0,0,0,0.08);
         }
+        .ad-slot {
+            background: #f0f0f0;
+            padding: 10px;
+            border: 1px dashed #ccc;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
-
 <?php include 'includes/header.php'; ?>
 
 <!-- Hero -->
@@ -68,20 +71,27 @@ try {
     <div class="container">
         <h1 class="display-4 fw-bold">About JobBridge</h1>
         <p class="lead mt-3">
-            JobBridge is a student-focused platform connecting young people with meaningful opportunities — 
+            JobBridge is a student-focused platform connecting young people with meaningful opportunities —
             from part-time jobs and internships to odd jobs and volunteer positions in your local area.
         </p>
     </div>
 </div>
 
-<div class="container mb-5">
+<!-- Ad: 728x90 Leaderboard -->
+<div class="ad-slot text-center my-3">
+    <small>Advertisement</small><br>
+    <div style="height: 90px; background: #eee; display: flex; align-items: center; justify-content: center;">
+        <span style="color: #999;">728x90 Ad Space</span>
+    </div>
+</div>
 
+<div class="container mb-5">
     <!-- About content -->
     <div class="row justify-content-center mb-5">
         <div class="col-lg-8">
             <h2 class="mb-4 text-center">What We Do</h2>
             <p class="lead">
-                We created JobBridge because students often struggle to find flexible, local work that fits around classes, 
+                We created JobBridge because students often struggle to find flexible, local work that fits around classes,
                 extracurriculars, and life. Whether you're looking for:
             </p>
             <ul class="list-group list-group-flush mb-4 fs-5">
@@ -118,12 +128,12 @@ try {
                                 <strong>Category:</strong> <?= ucfirst(htmlspecialchars($job['category'])) ?>
                             </div>
                             <div class="mb-2">
-                                <strong>Location:</strong> 
+                                <strong>Location:</strong>
                                 <?= htmlspecialchars($job['location_details'] ?: 'Not specified') ?>
                                 <span class="text-muted">(<?= htmlspecialchars($job['zip_code']) ?>)</span>
                             </div>
                             <div class="mb-3">
-                                <strong>Pay:</strong> 
+                                <strong>Pay:</strong>
                                 <?php if ($job['pay'] > 0): ?>
                                     $<?= number_format($job['pay'], 2) ?>
                                 <?php else: ?>
@@ -161,8 +171,6 @@ try {
             </div>
         </div>
     </div>
-
 </div>
-
 </body>
 </html>

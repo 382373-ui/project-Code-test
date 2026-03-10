@@ -40,7 +40,7 @@ $stmt->execute([$otherId, $myId]);
 $stmt = $pdo->prepare("
 SELECT *
 FROM messages
-WHERE 
+WHERE
    (sender_id = ? AND receiver_id = ?)
 OR (sender_id = ? AND receiver_id = ?)
 
@@ -97,6 +97,14 @@ $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
     font-size:11px;
     opacity:0.8;
 }
+.ad-slot {
+    background: #f0f0f0;
+    padding: 10px;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+    margin: 20px auto;
+    max-width: 700px;
+}
 </style>
 </head>
 
@@ -137,6 +145,14 @@ Send
 </button>
 </div>
 
+</div>
+
+<!-- Ad: 300x250 Medium Rectangle -->
+<div class="ad-slot text-center my-3">
+    <small>Advertisement</small><br>
+    <div style="height: 250px; background: #eee; display: flex; align-items: center; justify-content: center;">
+        <span style="color: #999;">300x250 Ad Space</span>
+    </div>
 </div>
 
 <script>
