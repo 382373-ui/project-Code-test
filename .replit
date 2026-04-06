@@ -44,3 +44,10 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[userenv]
+
+[userenv.shared]
+DB_HOST = "srv941.hstgr.io"
+DB_NAME = "u237055794_work"
+DB_USER = "u237055794_work"
