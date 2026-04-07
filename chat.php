@@ -3,197 +3,126 @@ require_once 'includes/config.php';
 require_once 'includes/db.php';
 require_once 'includes/auth.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit;
-}
+if (!isset($_SESSION['user_id'])) { header("Location: login.php"); exit; }
 
 $pdo = getDBConnection();
+$myId = $_SESSION['user_id'];
+$otherId = (int)($_GET['user_id'] ?? 0);
+$jobId = (int)($_GET['job_id'] ?? 0);
 
-$myId     = $_SESSION['user_id'];
-$otherId  = (int)($_GET['user_id'] ?? 0);
-$jobId    = (int)($_GET['job_id'] ?? 0);
-
-if ($otherId <= 0) {
-    die("Invalid user.");
-}
-
-/* ========== GET OTHER USER INFO ========== */
+// Get Other User Info
 $stmt = $pdo->prepare("SELECT username FROM users WHERE id = ?");
 $stmt->execute([$otherId]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+$otherUser = $stmt->fetch();
 
-if (!$user) {
-    die("User not found.");
+// Get Job Info
+$jobTitle = "";
+if($jobId > 0) {
+    $stmt = $pdo->prepare("SELECT title FROM jobs WHERE id = ?");
+    $stmt->execute([$jobId]);
+    $job = $stmt->fetch();
+    $jobTitle = $job['title'] ?? "";
 }
 
-/* ========== MARK MESSAGES AS READ ========== */
-$stmt = $pdo->prepare("
-UPDATE messages
-SET is_read = 1
-WHERE sender_id = ?
-AND receiver_id = ?
-");
-$stmt->execute([$otherId, $myId]);
+// Mark as read
+$stmt = $pdo->prepare("UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ? AND job_id = ?");
+$stmt->execute([$otherId, $myId, $jobId]);
 
-/* ========== LOAD CHAT MESSAGES ========== */
-$stmt = $pdo->prepare("
-SELECT *
-FROM messages
-WHERE
-   (sender_id = ? AND receiver_id = ?)
-OR (sender_id = ? AND receiver_id = ?)
-
-ORDER BY created_at ASC
-");
-
-$stmt->execute([$myId, $otherId, $otherId, $myId]);
-$messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Fetch history
+$stmt = $pdo->prepare("SELECT * FROM messages WHERE ((sender_id=? AND receiver_id=?) OR (sender_id=? AND receiver_id=?)) AND job_id = ? ORDER BY created_at ASC");
+$stmt->execute([$myId, $otherId, $otherId, $myId, $jobId]);
+$messages = $stmt->fetchAll();
 ?>
 
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Chat</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-<style>
-.chat-box{
-    max-width:700px;
-    margin:30px auto;
-    background:#f9f9f9;
-    padding:15px;
-    border-radius:8px;
-}
-
-.bubble{
-    padding:10px 15px;
-    border-radius:18px;
-    margin:6px;
-    max-width:75%;
-}
-
-.me{
-    background:#007bff;
-    color:white;
-    margin-left:auto;
-    text-align:right;
-}
-
-.them{
-    background:#e5e5ea;
-    color:black;
-}
-
-.input-area{
-    display:flex;
-    gap:6px;
-    margin-top:10px;
-}
-
-.time{
-    font-size:11px;
-    opacity:0.8;
-}
-.ad-slot {
-    background: #f0f0f0;
-    padding: 10px;
-    border: 1px dashed #ccc;
-    border-radius: 4px;
-    margin: 20px auto;
-    max-width: 700px;
-}
-</style>
+    <title>Chat with <?= htmlspecialchars($otherUser['username']) ?></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #chatArea { height: 450px; overflow-y: auto; background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 8px 8px 0 0; }
+        .bubble { max-width: 75%; padding: 10px 15px; border-radius: 20px; margin-bottom: 10px; position: relative; clear: both; }
+        .me { background: #007bff; color: white; float: right; border-bottom-right-radius: 2px; }
+        .them { background: #f1f0f0; color: #333; float: left; border-bottom-left-radius: 2px; }
+        .time { font-size: 0.7rem; opacity: 0.7; margin-top: 5px; display: block; }
+        .chat-footer { background: #fff; padding: 15px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 8px 8px; }
+    </style>
 </head>
-
-<body>
-
+<body class="bg-light">
 <?php include 'includes/header.php'; ?>
 
-<div class="chat-box">
+<div class="container mt-4" style="max-width: 700px;">
+    <div class="d-flex align-items-center mb-3">
+        <a href="messages.php" class="btn btn-sm btn-outline-secondary me-3">&larr; Back</a>
+        <div>
+            <h5 class="mb-0"><?= htmlspecialchars($otherUser['username']) ?></h5>
+            <small class="text-primary"><?= htmlspecialchars($jobTitle) ?></small>
+        </div>
+    </div>
 
-<h4>
-Chat with <?= htmlspecialchars($user['username']) ?>
-</h4>
+    <div id="chatArea">
+        <?php foreach($messages as $m): ?>
+            <div class="bubble <?= $m['sender_id'] == $myId ? 'me' : 'them' ?>">
+                <?= nl2br(htmlspecialchars($m['content'])) ?>
+                <span class="time"><?= date('g:i a', strtotime($m['created_at'])) ?></span>
+            </div>
+        <?php endforeach; ?>
+    </div>
 
-<div id="chatArea">
-
-<?php foreach($messages as $m): ?>
-
-<div class="bubble <?= $m['sender_id']==$myId ? 'me' : 'them' ?>">
-
-<?= nl2br(htmlspecialchars($m['content'])) ?>
-
-<div class="time">
-<?= $m['created_at'] ?>
-</div>
-
-</div>
-
-<?php endforeach; ?>
-
-</div>
-
-<!-- SEND BOX -->
-<div class="input-area">
-<input id="msg" class="form-control" placeholder="Type message...">
-
-<button class="btn btn-primary" onclick="sendMessage()">
-Send
-</button>
-</div>
-
-</div>
-
-<!-- Ad: 300x250 Medium Rectangle -->
-<div class="ad-slot text-center my-3">
-    <small>Advertisement</small><br>
-    <div style="height: 250px; background: #eee; display: flex; align-items: center; justify-content: center;">
-        <span style="color: #999;">300x250 Ad Space</span>
+    <div class="chat-footer">
+        <div class="input-group">
+            <input type="text" id="msgInput" class="form-control" placeholder="Write a message..." onkeypress="checkEnter(event)">
+            <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+        </div>
     </div>
 </div>
 
 <script>
-function sendMessage(){
+    const chatArea = document.getElementById('chatArea');
+    chatArea.scrollTop = chatArea.scrollHeight;
 
-let txt = document.getElementById("msg").value.trim();
-if(!txt) return;
+    function checkEnter(e) { if(e.key === 'Enter') sendMessage(); }
 
-fetch('send_message.php', {
-method:'POST',
-headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    function sendMessage() {
+        const input = document.getElementById('msgInput');
+        const text = input.value.trim(); // .trim() removes whitespace/newlines 
 
-body:
-"receiver_id=<?= $otherId ?>" +
-"&job_id=<?= $jobId ?>" +
-"&content=" + encodeURIComponent(txt)
+        // CRITICAL: Stop if the message is empty
+        if (text === "") {
+            return; 
+        }
 
-})
-.then(r=>r.json())
-.then(d=>{
+        const formData = new FormData();
+        formData.append('receiver_id', '<?= $otherId ?>');
+        formData.append('job_id', '<?= $jobId ?>');
+        formData.append('content', text);
 
-if(d.success){
+        fetch('send_message.php', { 
+            method: 'POST', 
+            body: formData 
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                // Append the new bubble to the chat area
+                const chatArea = document.getElementById('chatArea');
+                chatArea.innerHTML += `
+                    <div class="bubble me">
+                        ${text.replace(/\n/g, '<br>')}
+                        <span class="time">Just now</span>
+                    </div>`;
 
-let chat = document.getElementById("chatArea");
+                // CLEAR the input so it can't be sent again accidentally
+                input.value = ''; 
 
-chat.innerHTML += `
-<div class="bubble me">
-${txt}
-<div class="time">just now</div>
-</div>`;
-
-document.getElementById("msg").value = "";
-
-}
-else{
-alert("Error: " + d.error);
-}
-
-});
-}
+                // Scroll to the bottom [cite: 136]
+                chatArea.scrollTop = chatArea.scrollHeight;
+            } else {
+                console.error("Message failed to send:", data.error);
+            }
+        })
+        .catch(err => console.error("Network error:", err));
+    }
 </script>
-
 </body>
 </html>

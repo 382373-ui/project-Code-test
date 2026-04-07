@@ -21,7 +21,13 @@ if ($receiver <= 0 || $content === '') {
     echo json_encode(['error' => 'invalid_data']);
     exit;
 }
+// Inside send_message.php [cite: 154]
+$content = trim($_POST['content'] ?? '');
 
+if ($receiver <= 0 || $content === '') {
+    echo json_encode(['success' => false, 'error' => 'Message cannot be empty']);
+    exit;
+}
 // Insert EXACTLY to your columns
 $stmt = $pdo->prepare("
 INSERT INTO messages

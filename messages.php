@@ -11,172 +11,96 @@ if (!isset($_SESSION['user_id'])) {
 $pdo = getDBConnection();
 $myId = $_SESSION['user_id'];
 
-/* ================= GET CONVERSATIONS ================= */
-
+// Get unique conversations based on User + Job combination
 $stmt = $pdo->prepare("
-SELECT 
-    u.id AS user_id,
-    u.username,
-    j.title AS job_title,
-
-    m.content AS last_message,
-    m.created_at,
-
-    -- unread messages from this user to me
-    (
-      SELECT COUNT(*) FROM messages
-      WHERE sender_id = u.id
-      AND receiver_id = ?
-      AND is_read = 0
-    ) AS unread
-
-FROM messages m
-
-JOIN users u 
-  ON (u.id = CASE 
-        WHEN m.sender_id = ? THEN m.receiver_id 
-        ELSE m.sender_id END)
-
-LEFT JOIN jobs j 
-  ON j.id = m.job_id
-
-WHERE ? IN (m.sender_id, m.receiver_id)
-
-AND m.id = (
-    SELECT id FROM messages
-    WHERE (sender_id = m.sender_id AND receiver_id = m.receiver_id)
-       OR (sender_id = m.receiver_id AND receiver_id = m.sender_id)
-    ORDER BY created_at DESC LIMIT 1
-)
-
-GROUP BY u.id
-ORDER BY m.created_at DESC
+    SELECT 
+        u.id AS user_id,
+        u.username,
+        j.id AS job_id,
+        j.title AS job_title,
+        m.content AS last_message,
+        m.created_at,
+        (SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0 AND job_id = m.job_id) AS unread
+    FROM messages m
+    JOIN users u ON (u.id = CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END)
+    LEFT JOIN jobs j ON j.id = m.job_id
+    WHERE (m.sender_id = ? OR m.receiver_id = ?)
+    AND m.id IN (
+        SELECT MAX(id) FROM messages 
+        WHERE (sender_id = ? OR receiver_id = ?)
+        GROUP BY IF(sender_id < receiver_id, sender_id, receiver_id), job_id
+    )
+    ORDER BY m.created_at DESC
 ");
-
-$stmt->execute([$myId, $myId, $myId]);
+$stmt->execute([$myId, $myId, $myId, $myId, $myId, $myId]);
 $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Messages</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-<style>
-.conv {
-    padding:12px;
-    border-bottom:1px solid #ddd;
-    cursor:pointer;
-}
-.conv:hover {
-    background:#f5f5f5;
-}
-.time {
-    font-size:12px;
-    color:#666;
-}
-.badge {
-    float:right;
-}
-.text-job {
-    font-size:12px;
-    color:#0d6efd;
-}
-</style>
+    <title>Messages | JobBridge</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .inbox-container { max-width: 800px; margin: 20px auto; }
+        .conv-card { 
+            transition: 0.2s; 
+            border-left: 4px solid transparent; 
+            cursor: pointer;
+        }
+        .conv-card:hover { background: #f8f9fa; border-left: 4px solid #0d6efd; }
+        .unread { background: #edf4ff !important; font-weight: bold; }
+        .job-tag { font-size: 0.85rem; color: #6c757d; }
+        .last-msg { font-size: 0.9rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    </style>
 </head>
-
-<body>
+<body class="bg-light">
 <?php include 'includes/header.php'; ?>
 
-<div class="container mt-4">
+<div class="container inbox-container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Inbox</h3>
+        <input id="searchBox" class="form-control w-50" placeholder="Filter by name..." onkeyup="filterChats()">
+    </div>
 
-<h3>Your Messages</h3>
-
-<!-- ===== SEARCH BOX ===== -->
-<input id="searchBox"
-       class="form-control mb-2"
-       placeholder="Search conversations..."
-       onkeyup="filterChats()">
-
-<div id="inboxArea">
-
-<?php foreach($conversations as $c): ?>
-
-<div class="conv"
-     data-name="<?= strtolower($c['username']) ?>"
-     onclick="location='chat.php?user_id=<?= $c['user_id'] ?>'">
-
-    <div class="d-flex justify-content-between">
-
-        <strong>
-            <?= htmlspecialchars($c['username']) ?>
-        </strong>
-
-        <?php if($c['unread'] > 0): ?>
-            <span class="badge bg-danger">
-                <?= $c['unread'] ?>
-            </span>
+    <div class="list-group shadow-sm" id="inboxArea">
+        <?php foreach($conversations as $c): ?>
+        <a href="chat.php?user_id=<?= $c['user_id'] ?>&job_id=<?= $c['job_id'] ?>" 
+           class="list-group-item list-group-item-action conv-card <?= $c['unread'] > 0 ? 'unread' : '' ?>"
+           data-name="<?= strtolower($c['username']) ?>">
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="h6 mb-0"><?= htmlspecialchars($c['username']) ?></span>
+                    <?php if($c['job_title']): ?>
+                        <span class="job-tag"> | <?= htmlspecialchars($c['job_title']) ?></span>
+                    <?php endif; ?>
+                </div>
+                <small class="text-muted"><?= date('M j, g:i a', strtotime($c['created_at'])) ?></small>
+            </div>
+            
+            <div class="d-flex justify-content-between align-items-center mt-1">
+                <div class="last-msg"><?= htmlspecialchars($c['last_message']) ?></div>
+                <?php if($c['unread'] > 0): ?>
+                    <span class="badge rounded-pill bg-primary"><?= $c['unread'] ?></span>
+                <?php endif; ?>
+            </div>
+        </a>
+        <?php endforeach; ?>
+        
+        <?php if(empty($conversations)): ?>
+            <div class="p-5 text-center bg-white rounded">No messages yet.</div>
         <?php endif; ?>
-
     </div>
-
-    <?php if(!empty($c['job_title'])): ?>
-        <div class="text-job">
-            <?= htmlspecialchars($c['job_title']) ?>
-        </div>
-    <?php endif; ?>
-
-    <span>
-        <?= htmlspecialchars(substr($c['last_message'],0,40)) ?>
-    </span>
-
-    <div class="time">
-        <?= $c['created_at'] ?>
-    </div>
-
 </div>
 
-<?php endforeach; ?>
-
-<?php if(empty($conversations)): ?>
-<p>No conversations yet.</p>
-<?php endif; ?>
-
-</div><!-- inboxArea -->
-
-</div><!-- container -->
-
-<!-- ============ SCRIPTS ============ -->
-
 <script>
-// ---- SEARCH FILTER ----
 function filterChats(){
- let q = document.getElementById("searchBox").value.toLowerCase();
-
- document.querySelectorAll('.conv').forEach(div=>{
-    let name = div.dataset.name;
-    div.style.display =
-        name.includes(q) ? '' : 'none';
- });
+    let q = document.getElementById("searchBox").value.toLowerCase();
+    document.querySelectorAll('.conv-card').forEach(el => {
+        el.style.display = el.dataset.name.includes(q) ? '' : 'none';
+    });
 }
-
-// ---- AUTO REFRESH INBOX ----
-function refreshInbox(){
-fetch('messages.php?partial=1')
-.then(r => r.text())
-.then(html => {
-    let area = document.getElementById('inboxArea');
-    if(area){
-        area.innerHTML = html;
-    }
-});
-}
-
-// refresh every 4 seconds
-setInterval(refreshInbox, 4000);
 </script>
-
 </body>
 </html>
