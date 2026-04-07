@@ -263,8 +263,8 @@ $userJobs = $jobsStmt->fetchAll();
         </div>
     </div>
     <?php endif; ?>
-    <?php if (($user['role'] ?? '') !== 'student'): ?>
-        <?php foreach ($userJobs as $job): ?>
+    <?php if (($user['role'] ?? '') !== 'student') { ?>
+        <?php foreach ($userJobs as $job) { ?>
             <div class="modal fade" id="editJobModal<?= $job['id'] ?>" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <form method="POST" class="modal-content">
@@ -324,8 +324,8 @@ $userJobs = $jobsStmt->fetchAll();
                     </form>
                 </div>
             </div>
-        <?php endforeach; ?>
-    <?php endif; ?>
+        <?php } ?>
+    <?php } ?>
     <?php if (($user['role'] ?? '') !== 'student'): ?>
     <div class="modal fade" id="postJobModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
