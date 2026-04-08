@@ -44,3 +44,4 @@ outputType = "webview"
 task = "shell.exec"
 args = "php -S 0.0.0.0:5000 -t ."
 waitForPort = 5000
+y
