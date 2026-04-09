@@ -24,7 +24,7 @@ try {
 
     // Filters
     if (!empty($search_title)) {
-        $sql .= " AND title LIKE ?";
+        $sql .= " AND title ILIKE ?";
         $params[] = '%' . $search_title . '%';
     }
 
