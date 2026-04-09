@@ -27,13 +27,13 @@ function redirect($url) {
 
 // Flash messages
 function setFlashMessage($message, $type = 'success') {
-    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+    startSecureSession();
     $_SESSION['flash_message'] = $message;
     $_SESSION['flash_type'] = $type;
 }
 
 function getFlashMessage() {
-    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+    startSecureSession();
     if (isset($_SESSION['flash_message'])) {
         $message = $_SESSION['flash_message'];
         $type = $_SESSION['flash_type'] ?? 'info';
@@ -45,7 +45,7 @@ function getFlashMessage() {
 
 // CSRF token helpers
 function generateCSRFToken() {
-    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+    startSecureSession();
     if (!isset($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
@@ -53,7 +53,7 @@ function generateCSRFToken() {
 }
 
 function validateCSRFToken($token) {
-    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+    startSecureSession();
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
