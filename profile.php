@@ -254,71 +254,6 @@ $userJobs = $jobsStmt->fetchAll();
 
                                 </td>
                             </tr>
-
-                            <!-- EDIT MODAL (INSIDE LOOP, OUTSIDE ROW VISUALLY) -->
-                            <div class="modal fade" id="editJobModal<?= $job['id'] ?>" tabindex="-1">
-                                <div class="modal-dialog modal-lg">
-                                    <form method="POST" class="modal-content">
-                                        <input type="hidden" name="job_action" value="edit">
-                                        <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
-
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Edit Job</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-
-                                        <div class="modal-body">
-                                            <div class="mb-3">
-                                                <label class="form-label">Title</label>
-                                                <input name="title" class="form-control"
-                                                       value="<?= htmlspecialchars($job['title']) ?>" required>
-                                            </div>
-
-                                            <div class="mb-3">
-                                                <label class="form-label">Category</label>
-                                                <select name="category" class="form-select">
-                                                    <option value="company" <?= $job['category']=='company'?'selected':'' ?>>Company</option>
-                                                    <option value="odd" <?= $job['category']=='odd'?'selected':'' ?>>Odd Job</option>
-                                                    <option value="volunteer" <?= $job['category']=='volunteer'?'selected':'' ?>>Volunteer</option>
-                                                    <option value="internship" <?= $job['category']=='internship'?'selected':'' ?>>Internship</option>
-                                                </select>
-                                            </div>
-
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Pay</label>
-                                                    <input type="number" step="0.01" name="pay"
-                                                           class="form-control" value="<?= $job['pay'] ?>">
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <label class="form-label">Pay Type</label>
-                                                    <select name="pay_type" class="form-select">
-                                                        <option value="full" <?= $job['pay_type']=='full'?'selected':'' ?>>Full</option>
-                                                        <option value="hourly" <?= $job['pay_type']=='hourly'?'selected':'' ?>>Hourly</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div class="mb-3 mt-3">
-                                                <label class="form-label">Description</label>
-                                                <textarea name="description" class="form-control" rows="4" required><?= htmlspecialchars($job['description']) ?></textarea>
-                                            </div>
-
-                                            <div class="mb-3">
-                                                <label class="form-label">Date Needed</label>
-                                                <input type="date" name="date_needed"
-                                                       class="form-control" value="<?= $job['date_needed'] ?>">
-                                            </div>
-                                        </div>
-
-                                        <div class="modal-footer">
-                                            <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button class="btn btn-primary">Save Changes</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-
                             <?php endforeach; ?>
                         </tbody>
                     </table>
@@ -328,6 +263,69 @@ $userJobs = $jobsStmt->fetchAll();
         </div>
     </div>
     <?php endif; ?>
+    <?php if (($user['role'] ?? '') !== 'student') { ?>
+        <?php foreach ($userJobs as $job) { ?>
+            <div class="modal fade" id="editJobModal<?= $job['id'] ?>" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <form method="POST" class="modal-content">
+                        <input type="hidden" name="job_action" value="edit">
+                        <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
+
+                        <div class="modal-header">
+                            <h5 class="modal-title">Edit Job</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Title</label>
+                                <input name="title" class="form-control" value="<?= htmlspecialchars($job['title']) ?>" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Category</label>
+                                <select name="category" class="form-select">
+                                    <option value="company" <?= $job['category'] == 'company' ? 'selected' : '' ?>>Company</option>
+                                    <option value="odd" <?= $job['category'] == 'odd' ? 'selected' : '' ?>>Odd Job</option>
+                                    <option value="volunteer" <?= $job['category'] == 'volunteer' ? 'selected' : '' ?>>Volunteer</option>
+                                    <option value="internship" <?= $job['category'] == 'internship' ? 'selected' : '' ?>>Internship</option>
+                                </select>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Pay</label>
+                                    <input type="number" step="0.01" name="pay" class="form-control" value="<?= htmlspecialchars((string)($job['pay'] ?? '')) ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Pay Type</label>
+                                    <select name="pay_type" class="form-select">
+                                        <option value="full" <?= $job['pay_type'] == 'full' ? 'selected' : '' ?>>Full</option>
+                                        <option value="hourly" <?= $job['pay_type'] == 'hourly' ? 'selected' : '' ?>>Hourly</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mb-3 mt-3">
+                                <label class="form-label">Description</label>
+                                <textarea name="description" class="form-control" rows="4" required><?= htmlspecialchars($job['description']) ?></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Date Needed</label>
+                                <input type="date" name="date_needed" class="form-control" value="<?= htmlspecialchars((string)($job['date_needed'] ?? '')) ?>">
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <?php } ?>
+    <?php } ?>
     <?php if (($user['role'] ?? '') !== 'student'): ?>
     <div class="modal fade" id="postJobModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
