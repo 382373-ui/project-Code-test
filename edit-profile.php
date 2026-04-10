@@ -71,16 +71,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             (user_id, first_name, last_name, grade_year, skills, availability, 
              location_radius, bio, age, profile_img, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE
-                first_name = VALUES(first_name),
-                last_name = VALUES(last_name),
-                grade_year = VALUES(grade_year),
-                skills = VALUES(skills),
-                availability = VALUES(availability),
-                location_radius = VALUES(location_radius),
-                bio = VALUES(bio),
-                age = VALUES(age),
-                profile_img = VALUES(profile_img),
+            ON CONFLICT (user_id) DO UPDATE SET
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                grade_year = EXCLUDED.grade_year,
+                skills = EXCLUDED.skills,
+                availability = EXCLUDED.availability,
+                location_radius = EXCLUDED.location_radius,
+                bio = EXCLUDED.bio,
+                age = EXCLUDED.age,
+                profile_img = EXCLUDED.profile_img,
                 updated_at = NOW()
         ");
 

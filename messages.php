@@ -28,7 +28,7 @@ $stmt = $pdo->prepare("
     AND m.id IN (
         SELECT MAX(id) FROM messages 
         WHERE (sender_id = ? OR receiver_id = ?)
-        GROUP BY IF(sender_id < receiver_id, sender_id, receiver_id), job_id
+        GROUP BY CASE WHEN sender_id < receiver_id THEN sender_id ELSE receiver_id END, job_id
     )
     ORDER BY m.created_at DESC
 ");
