@@ -31,19 +31,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['job_action'])) {
     } else {
         try {
             switch ($_POST['job_action']) {
-
                 case 'delete':
-                    $stmt = $db->prepare("DELETE FROM jobs WHERE id = ?");
+                    $stmt = $db->prepare("UPDATE jobs SET is_deleted = 1, is_active = 0 WHERE id = ?");
                     $stmt->execute([$jobId]);
-                    $message = "Job deleted successfully.";
+                    $message = "Job removed successfully.";
                     break;
 
                 case 'toggle':
-                    $stmt = $db->prepare("
-                        UPDATE jobs
-                        SET is_active = NOT is_active
-                        WHERE id = ?
-                    ");
+                    $stmt = $db->prepare("UPDATE jobs SET is_active = NOT is_active WHERE id = ?");
                     $stmt->execute([$jobId]);
                     $message = "Job status updated.";
                     break;
@@ -51,40 +46,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['job_action'])) {
                 case 'edit':
                     $stmt = $db->prepare("
                         UPDATE jobs
-                        SET title = ?, description = ?, pay = ?, pay_type = ?, category = ?, date_needed = ?
+                        SET title = ?, 
+                            description = ?, 
+                            pay = ?, 
+                            pay_type = ?, 
+                            category = ?, 
+                            date_needed = ?,
+                            zip_code = ?,
+                            location_details = ?
                         WHERE id = ?
                     ");
                     $stmt->execute([
-                        trim($_POST['title']),
-                        trim($_POST['description']),
-                        $_POST['pay'] !== '' ? $_POST['pay'] : null,
-                        $_POST['pay_type'],
-                        $_POST['category'],
-                        $_POST['date_needed'] ?: null,
+                        trim($_POST['title'] ?? ''),
+                        trim($_POST['description'] ?? ''),
+                        (isset($_POST['pay']) && $_POST['pay'] !== '') ? $_POST['pay'] : null,
+                        $_POST['pay_type'] ?? 'full',
+                        $_POST['category'] ?? 'odd',
+                        !empty($_POST['date_needed']) ? $_POST['date_needed'] : null,
+                        trim($_POST['zip_code'] ?? ''),
+                        trim($_POST['location_details'] ?? ''),
                         $jobId
                     ]);
                     $message = "Job updated successfully.";
                     break;
             }
         } catch (PDOException $e) {
-            $error = "Database error.";
+            $error = "Database error: " . $e->getMessage();
         }
     }
 }
 
-
-// --- 1. HANDLE JOB POST SUBMISSION ---
+// --- HANDLE JOB POST SUBMISSION ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'post_job') {
     if (isset($_SESSION['role']) && $_SESSION['role'] === 'student') {
         $error = "Students are not authorized to post jobs.";
     } else {
-        $title = trim($_POST['title']);
-        $category = $_POST['category'];
-        $description = trim($_POST['description']);
+        $title = trim($_POST['title'] ?? '');
+        $category = $_POST['category'] ?? '';
+        $description = trim($_POST['description'] ?? '');
         $pay = !empty($_POST['pay']) ? $_POST['pay'] : null;
-        $pay_type = $_POST['pay_type'] ?? 'full'; // Added pay_type
-        $zip_code = trim($_POST['zip_code']);
-        $location_details = trim($_POST['location_details']);
+        $pay_type = $_POST['pay_type'] ?? 'full'; 
+        $zip_code = trim($_POST['zip_code'] ?? '');
+        $location_details = trim($_POST['location_details'] ?? '');
         $date_needed = !empty($_POST['date_needed']) ? $_POST['date_needed'] : null;
 
         if (empty($title) || empty($description) || empty($category)) {
@@ -93,9 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $error = "Please enter a valid 5-digit zip code.";
         } else {
             try {
-                // Updated SQL to include pay_type
-                $sql = "INSERT INTO jobs (poster_user_id, title, description, category, pay, pay_type, zip_code, location_details, date_needed, date_posted, is_active, verified_flag) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 1, 0)";
+                $sql = "INSERT INTO jobs (poster_user_id, title, description, category, pay, pay_type, zip_code, location_details, date_needed, date_posted, is_active, verified_flag, is_deleted) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 1, 0, 0)";
                 $stmt = $db->prepare($sql);
                 $stmt->execute([$userId, $title, $description, $category, $pay, $pay_type, $zip_code, $location_details, $date_needed]);
                 $message = "Job posted successfully!";
@@ -112,17 +114,18 @@ $stmt->execute([$userId]);
 $user = $stmt->fetch();
 
 $profileImg = !empty($user['profile_img']) ? htmlspecialchars($user['profile_img']) : 'public/images/default-avatar.png';
-// --- FETCH JOBS POSTED BY THIS USER ---
+
+// --- FETCH JOBS (Updated to include all fields) ---
 $jobsStmt = $db->prepare("
-    SELECT id, title, description, category, pay, pay_type, zip_code, date_posted, date_needed, is_active
+    SELECT id, title, description, category, pay, pay_type, zip_code, location_details, date_posted, date_needed, is_active, boost_amount
     FROM jobs
-    WHERE poster_user_id = ?
-    ORDER BY date_posted DESC
+    WHERE poster_user_id = ? AND is_deleted = 0
+    ORDER BY boost_amount DESC, date_posted DESC
 ");
 $jobsStmt->execute([$userId]);
 $userJobs = $jobsStmt->fetchAll();
-
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -182,106 +185,83 @@ $userJobs = $jobsStmt->fetchAll();
                 </div>
             </div>
         </div>
-    </div>
-    <?php if (($user['role'] ?? '') !== 'student'): ?>
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5>Your Posted Jobs</h5>
+
+        <?php if (($user['role'] ?? '') !== 'student'): ?>
+        <div class="card mt-4">
+            <div class="card-header"><h5>Your Posted Jobs</h5></div>
+            <div class="card-body">
+                <?php if (empty($userJobs)): ?>
+                    <p class="text-muted">You have not posted any jobs yet.</p>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Pay</th>
+                                    <th>Date Needed</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($userJobs as $job): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($job['title']) ?></td>
+                                    <td>
+                                        <?php if ($job['pay'] !== null): ?>
+                                            $<?= number_format($job['pay'], 2) ?><?= $job['pay_type'] === 'hourly' ? '/hr' : '' ?>
+                                        <?php else: ?>—<?php endif; ?>
+                                    </td>
+                                    <td><?= $job['date_needed'] ? htmlspecialchars(date("M j, Y", strtotime($job['date_needed']))) : 'Flexible' ?></td>
+                                    <td>
+                                        <span class="badge <?= $job['is_active'] ? 'bg-success' : 'bg-secondary' ?>">
+                                            <?= $job['is_active'] ? 'Active' : 'Closed' ?>
+                                        </span>
+                                    </td>
+                                    <td class="text-nowrap">
+                                        <form method="POST" class="d-inline">
+                                            <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
+                                            <input type="hidden" name="job_action" value="toggle">
+                                            <button class="btn btn-sm btn-warning"><?= $job['is_active'] ? 'Close' : 'Reopen' ?></button>
+                                        </form>
+
+                                        <a href="boost.php?id=<?= $job['id'] ?>" class="btn btn-sm <?= $job['boost_amount'] > 0 ? 'btn-success' : 'btn-outline-success' ?>">
+                                            ⚡ <?= $job['boost_amount'] > 0 ? 'Boosted ($' . number_format($job['boost_amount'], 2) . ')' : 'Boost' ?>
+                                        </a>
+
+                                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editJobModal<?= $job['id'] ?>">Edit</button>
+
+                                        <form method="POST" class="d-inline" onsubmit="return confirm('Delete this job?');">
+                                            <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
+                                            <input type="hidden" name="job_action" value="delete">
+                                            <button class="btn btn-sm btn-danger">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
-        <div class="card-body">
-            <?php if (empty($userJobs)): ?>
-                <p class="text-muted">You have not posted any jobs yet.</p>
-            <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-striped align-middle">
-                        <thead>
-                            <tr>
-                                <th>Title</th>
-                                <th>Category</th>
-                                <th>Pay</th>
-                                <th>Date Needed</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            <?php foreach ($userJobs as $job): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($job['title']) ?></td>
-                                <td><?= ucfirst(htmlspecialchars($job['category'])) ?></td>
-                                <td>
-                                    <?php if ($job['pay'] !== null): ?>
-                                        $<?= number_format($job['pay'], 2) ?><?= $job['pay_type'] === 'hourly' ? '/hr' : '' ?>
-                                    <?php else: ?>—<?php endif; ?>
-                                </td>
-                                <td>
-                                    <?= $job['date_needed']
-                                        ? htmlspecialchars(date("M j, Y", strtotime($job['date_needed'])))
-                                        : 'Flexible'
-                                    ?>
-                                </td>
-                                <td>
-                                    <span class="badge <?= $job['is_active'] ? 'bg-success' : 'bg-secondary' ?>">
-                                        <?= $job['is_active'] ? 'Active' : 'Closed' ?>
-                                    </span>
-                                </td>
-                                <td class="text-nowrap">
-
-                                    <!-- TOGGLE -->
-                                    <form method="POST" class="d-inline">
-                                        <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
-                                        <input type="hidden" name="job_action" value="toggle">
-                                        <button class="btn btn-sm btn-warning">
-                                            <?= $job['is_active'] ? 'Close' : 'Reopen' ?>
-                                        </button>
-                                    </form>
-
-                                    <!-- EDIT -->
-                                    <button
-                                        class="btn btn-sm btn-primary"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#editJobModal<?= $job['id'] ?>">
-                                        Edit
-                                    </button>
-
-                                    <!-- DELETE -->
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('Delete this job permanently?');">
-                                        <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
-                                        <input type="hidden" name="job_action" value="delete">
-                                        <button class="btn btn-sm btn-danger">Delete</button>
-                                    </form>
-
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-
-                </div>
-            <?php endif; ?>
-        </div>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
-    <?php if (($user['role'] ?? '') !== 'student') { ?>
-        <?php foreach ($userJobs as $job) { ?>
-            <div class="modal fade" id="editJobModal<?= $job['id'] ?>" tabindex="-1" aria-hidden="true">
+
+    <?php if (($user['role'] ?? '') !== 'student') { 
+        foreach ($userJobs as $job) { ?>
+            <div class="modal fade" id="editJobModal<?= $job['id'] ?>" tabindex="-1">
                 <div class="modal-dialog modal-lg">
                     <form method="POST" class="modal-content">
                         <input type="hidden" name="job_action" value="edit">
                         <input type="hidden" name="job_id" value="<?= $job['id'] ?>">
-
                         <div class="modal-header">
                             <h5 class="modal-title">Edit Job</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-
                         <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">Title</label>
-                                <input name="title" class="form-control" value="<?= htmlspecialchars($job['title']) ?>" required>
-                            </div>
-
+                            <div class="mb-3"><label class="form-label">Title</label><input name="title" class="form-control" value="<?= htmlspecialchars($job['title']) ?>" required></div>
                             <div class="mb-3">
                                 <label class="form-label">Category</label>
                                 <select name="category" class="form-select">
@@ -291,12 +271,8 @@ $userJobs = $jobsStmt->fetchAll();
                                     <option value="internship" <?= $job['category'] == 'internship' ? 'selected' : '' ?>>Internship</option>
                                 </select>
                             </div>
-
                             <div class="row">
-                                <div class="col-md-6">
-                                    <label class="form-label">Pay</label>
-                                    <input type="number" step="0.01" name="pay" class="form-control" value="<?= htmlspecialchars((string)($job['pay'] ?? '')) ?>">
-                                </div>
+                                <div class="col-md-6"><label class="form-label">Pay</label><input type="number" step="0.01" name="pay" class="form-control" value="<?= htmlspecialchars((string)($job['pay'] ?? '')) ?>"></div>
                                 <div class="col-md-6">
                                     <label class="form-label">Pay Type</label>
                                     <select name="pay_type" class="form-select">
@@ -305,18 +281,24 @@ $userJobs = $jobsStmt->fetchAll();
                                     </select>
                                 </div>
                             </div>
-
-                            <div class="mb-3 mt-3">
-                                <label class="form-label">Description</label>
-                                <textarea name="description" class="form-control" rows="4" required><?= htmlspecialchars($job['description']) ?></textarea>
+                            <div class="mb-3 mt-3"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="4" required><?= htmlspecialchars($job['description']) ?></textarea></div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Zip Code</label>
+                                    <input type="text" name="zip_code" class="form-control" pattern="\d{5}" value="<?= htmlspecialchars($job['zip_code'] ?? '') ?>">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Date Needed</label>
+                                    <input type="date" name="date_needed" class="form-control" value="<?= htmlspecialchars((string)($job['date_needed'] ?? '')) ?>">
+                                </div>
                             </div>
-
+                            
                             <div class="mb-3">
-                                <label class="form-label">Date Needed</label>
-                                <input type="date" name="date_needed" class="form-control" value="<?= htmlspecialchars((string)($job['date_needed'] ?? '')) ?>">
+                                <label class="form-label">Location Details (Optional)</label>
+                                <input type="text" name="location_details" class="form-control" value="<?= htmlspecialchars($job['location_details'] ?? '') ?>">
                             </div>
                         </div>
-
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                             <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -324,93 +306,53 @@ $userJobs = $jobsStmt->fetchAll();
                     </form>
                 </div>
             </div>
-        <?php } ?>
-    <?php } ?>
-    <?php if (($user['role'] ?? '') !== 'student'): ?>
+    <?php } } ?>
+
     <div class="modal fade" id="postJobModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Post a New Job</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <form method="POST" class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Post a New Job</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="post_job">
+                    <div class="mb-3"><label class="form-label">Job Title *</label><input type="text" name="title" class="form-control" required></div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Category *</label>
+                            <select name="category" class="form-select" required>
+                                <option value="" disabled selected>Select Category</option>
+                                <option value="company">Company</option>
+                                <option value="odd">Odd Job</option>
+                                <option value="volunteer">Volunteer</option>
+                                <option value="internship">Internship</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Payment Type *</label>
+                            <select name="pay_type" id="payTypeSelect" class="form-select" required>
+                                <option value="full">In Full</option>
+                                <option value="hourly">Hourly</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3"><label class="form-label">Pay Amount ($)</label><input type="number" step="0.01" name="pay" id="payInput" class="form-control"></div>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Description *</label><textarea name="description" class="form-control" rows="4" required></textarea></div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><label class="form-label">Zip Code</label><input type="text" name="zip_code" class="form-control" pattern="\d{5}"></div>
+                        <div class="col-md-6 mb-3"><label class="form-label">Date Needed</label><input type="date" name="date_needed" class="form-control"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Location Details (Optional)</label>
+                        <input type="text" name="location_details" class="form-control" placeholder="e.g. Near the library">
+                    </div>
                 </div>
-                <form method="POST" action="">
-                    <div class="modal-body">
-                        <input type="hidden" name="action" value="post_job">
-                        <div class="mb-3">
-                            <label class="form-label">Job Title *</label>
-                            <input type="text" name="title" class="form-control" required placeholder="e.g. Lawn Mowing">
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Category *</label>
-                                <select name="category" class="form-select" required>
-                                    <option value="" disabled selected>Select Category</option>
-                                    <option value="company">Company</option>
-                                    <option value="odd">Odd Job</option>
-                                    <option value="volunteer">Volunteer</option>
-                                    <option value="internship">Internship</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Payment Type *</label>
-                                <select name="pay_type" id="payTypeSelect" class="form-select" required>
-                                    <option value="full">In Full</option>
-                                    <option value="hourly">Hourly</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label" id="payLabel">Pay Amount ($)</label>
-                                <input type="number" step="0.01" min="0" name="pay" id="payInput" class="form-control" placeholder="0.00">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Description *</label>
-                            <textarea name="description" class="form-control" rows="4" required></textarea>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Zip Code</label>
-                                <input type="text" name="zip_code" class="form-control" pattern="\d{5}" maxlength="5" oninput="this.value = this.value.replace(/[^0-9]/g, '');" placeholder="12345">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Date Needed</label>
-                                <input type="date" name="date_needed" class="form-control">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Location Details</label>
-                                <input type="text" name="location_details" class="form-control">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Post Job</button>
-                    </div>
-                </form>
-            </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Post Job</button>
+                </div>
+            </form>
         </div>
     </div>
-    <?php endif; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Update placeholder based on payment type
-        const payTypeSelect = document.getElementById('payTypeSelect');
-        const payInput = document.getElementById('payInput');
-        
-        payTypeSelect.addEventListener('change', function() {
-            if(this.value === 'hourly') {
-                payInput.placeholder = "e.g. 15.00/hr";
-            } else {
-                payInput.placeholder = "0.00 (Total)";
-            }
-        });
-
-        payInput.addEventListener('blur', function() {
-            let val = parseFloat(this.value);
-            if (!isNaN(val)) { this.value = val.toFixed(2); }
-        });
-    </script>
 </body>
 </html>
