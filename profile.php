@@ -157,6 +157,7 @@ $userJobs = $jobsStmt->fetchAll();
                         <div class="d-grid gap-2">
                             <a href="edit-profile.php" class="btn btn-outline-primary btn-sm">Edit Profile</a>
                             <?php if (($user['role'] ?? '') !== 'student'): ?>
+    <a href="resume.php?user=<?= $userId ?>" class="btn btn-dark btn-sm">View Resume Portfolio</a>
                                 <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#postJobModal">+ Post a New Job</button>
                             <?php endif; ?>
                             <a href="change-password.php" class="btn btn-outline-secondary btn-sm">Change Password</a>
