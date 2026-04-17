@@ -172,15 +172,64 @@ try {
         </div>
     </div>
 </div>
+<!-- Admin Access Modal -->
+<div class="modal fade" id="adminModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title text-muted">Admin Access</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form onsubmit="return false;">
+                    <input type="password" id="adminPassInput" class="form-control" placeholder="Password" autocomplete="off">
+                </form>
+                <div id="adminPassError" class="text-danger small mt-2" style="display:none;">Incorrect password.</div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button class="btn btn-primary w-100" id="adminPassSubmit">Continue</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+var adminModal = new bootstrap.Modal(document.getElementById('adminModal'));
+
 document.addEventListener('keydown', function(e) {
     if (e.metaKey && e.key === 'l') {
         e.preventDefault();
-        var pass = prompt('Enter admin password:');
-        if (pass === 'AdminZSRB') {
-            window.location.href = 'admin.php';
-        }
+        document.getElementById('adminPassInput').value = '';
+        document.getElementById('adminPassError').style.display = 'none';
+        adminModal.show();
+        setTimeout(function() {
+            document.getElementById('adminPassInput').focus();
+        }, 300);
     }
+});
+
+function submitAdminPass() {
+    var pass = document.getElementById('adminPassInput').value;
+    var formData = new FormData();
+    formData.append('password', pass);
+    fetch('admin-auth.php', { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                adminModal.hide();
+                window.location.href = 'admin.php';
+            } else {
+                document.getElementById('adminPassError').style.display = 'block';
+                document.getElementById('adminPassInput').value = '';
+                document.getElementById('adminPassInput').focus();
+            }
+        });
+}
+
+document.getElementById('adminPassSubmit').addEventListener('click', submitAdminPass);
+
+document.getElementById('adminPassInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') submitAdminPass();
 });
 </script>
 </body>
