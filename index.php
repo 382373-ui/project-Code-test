@@ -172,16 +172,25 @@ try {
         </div>
     </div>
 </div>
-<script>
-document.addEventListener('keydown', function(e) {
-    if (e.metaKey && e.key === 'l') {
-        e.preventDefault();
-        var pass = prompt('Enter admin password:');
-        if (pass === 'AdminZSRB') {
-            window.location.href = 'admin.php';
+    <script>
+    document.addEventListener('keydown', function(e) {
+        if (e.metaKey && e.key === 'l') {
+            e.preventDefault();
+            var pass = prompt('Enter admin password:');
+            if (pass === null) return;
+            var formData = new FormData();
+            formData.append('password', pass);
+            fetch('admin-auth.php', { method: 'POST', body: formData })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        window.location.href = 'admin.php';
+                    } else {
+                        alert('Incorrect password.');
+                    }
+                });
         }
-    }
-});
-</script>
+    });
+    </script>
 </body>
 </html>
