@@ -1,41 +1,39 @@
--- JobBridge Database Schema (PostgreSQL)
+-- JobBridge Database Schema
 
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) DEFAULT 'student' CHECK (role IN ('student', 'employer', 'admin')),
+    role ENUM('student', 'employer', 'admin') DEFAULT 'student',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_verified BOOLEAN DEFAULT FALSE
+    is_verified BOOLEAN DEFAULT FALSE,
+    INDEX idx_username (username),
+    INDEX idx_email (email)
 );
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 CREATE TABLE IF NOT EXISTS profiles (
-    id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL UNIQUE,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
     first_name VARCHAR(50),
     last_name VARCHAR(50),
     profile_img VARCHAR(255),
     grade_year VARCHAR(20),
-    age INT,
     skills TEXT,
     availability VARCHAR(100),
     location_radius INT,
     bio TEXT,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS jobs (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     poster_user_id INT NOT NULL,
     title VARCHAR(200) NOT NULL,
     description TEXT NOT NULL,
-    category VARCHAR(20) NOT NULL CHECK (category IN ('company', 'odd', 'volunteer', 'internship')),
+    category ENUM('company', 'odd', 'volunteer', 'internship') NOT NULL,
     pay DECIMAL(10, 2) NULL,
-    pay_type VARCHAR(20),
     zip_code VARCHAR(10),
     date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_needed DATE NULL,
@@ -43,36 +41,36 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_active BOOLEAN DEFAULT TRUE,
     verified_flag BOOLEAN DEFAULT FALSE,
     attachments VARCHAR(255),
-    FOREIGN KEY (poster_user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (poster_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_zip (zip_code),
+    INDEX idx_category (category),
+    INDEX idx_date_posted (date_posted)
 );
-CREATE INDEX IF NOT EXISTS idx_jobs_zip ON jobs(zip_code);
-CREATE INDEX IF NOT EXISTS idx_jobs_category ON jobs(category);
-CREATE INDEX IF NOT EXISTS idx_jobs_date_posted ON jobs(date_posted);
 
 CREATE TABLE IF NOT EXISTS applications (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     job_id INT NOT NULL,
     applicant_user_id INT NOT NULL,
     cover_text TEXT,
     resume_file_ref VARCHAR(255),
-    status VARCHAR(20) DEFAULT 'applied' CHECK (status IN ('applied', 'accepted', 'rejected')),
+    status ENUM('applied', 'accepted', 'rejected') DEFAULT 'applied',
     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
     FOREIGN KEY (applicant_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS saved_jobs (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     job_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
-    UNIQUE (user_id, job_id)
+    UNIQUE KEY unique_save (user_id, job_id)
 );
 
 CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     sender_id INT NOT NULL,
     receiver_id INT NOT NULL,
     job_id INT NULL,
@@ -85,7 +83,7 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE TABLE IF NOT EXISTS job_confirmations (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     job_id INT NOT NULL,
     worker_user_id INT NOT NULL,
     poster_confirmed BOOLEAN DEFAULT FALSE,
@@ -98,7 +96,7 @@ CREATE TABLE IF NOT EXISTS job_confirmations (
 );
 
 CREATE TABLE IF NOT EXISTS ratings (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     reviewer_id INT NOT NULL,
     reviewed_user_id INT NOT NULL,
     job_id INT NOT NULL,
@@ -111,31 +109,20 @@ CREATE TABLE IF NOT EXISTS ratings (
 );
 
 CREATE TABLE IF NOT EXISTS flags (
-    id SERIAL PRIMARY KEY,
-    item_type VARCHAR(20) NOT NULL CHECK (item_type IN ('job', 'user', 'message')),
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_type ENUM('job', 'user', 'message') NOT NULL,
     item_id INT NOT NULL,
     reported_by INT NOT NULL,
     reason TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved')),
+    status ENUM('pending', 'reviewed', 'resolved') DEFAULT 'pending',
     FOREIGN KEY (reported_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS ads (
-    id SERIAL PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     placement VARCHAR(50),
     html_content TEXT,
     start_date DATE,
     end_date DATE
-);
-
-CREATE TABLE IF NOT EXISTS job_ratings (
-    id SERIAL PRIMARY KEY,
-    job_id INT NOT NULL,
-    user_id INT NOT NULL,
-    rating INT CHECK (rating BETWEEN 1 AND 5),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE (job_id, user_id)
 );

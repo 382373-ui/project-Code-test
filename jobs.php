@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['rate_job_id'])) {
     $stmt = $pdo->prepare("
         INSERT INTO job_ratings (job_id, user_id, rating)
         VALUES (?, ?, ?)
-        ON CONFLICT (job_id, user_id) DO UPDATE SET rating = EXCLUDED.rating
+        ON DUPLICATE KEY UPDATE rating = VALUES(rating)
     ");
     $stmt->execute([$jobId, $_SESSION['user_id'], $rating]);
 
