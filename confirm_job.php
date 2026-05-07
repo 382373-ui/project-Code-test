@@ -65,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "A worker has submitted proof of completion for your job \"{$job['title']}\".\n\nLog in to review and confirm:\n" . (getenv('APP_URL') ?: 'http://localhost') . "/confirm_job.php?job_id=$jobId",
                 "From: noreply@jobbridge.local");
             $message = 'Proof submitted. Waiting for poster confirmation.';
-            $confirmation = $db->prepare("SELECT * FROM job_confirmations WHERE job_id = ? AND worker_user_id = ?")->execute([$jobId, $uid]);
             $stmt2 = $db->prepare("SELECT * FROM job_confirmations WHERE job_id = ? AND worker_user_id = ?");
             $stmt2->execute([$jobId, $uid]);
             $confirmation = $stmt2->fetch(PDO::FETCH_ASSOC);
