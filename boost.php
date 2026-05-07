@@ -16,38 +16,26 @@ $job = $stmt->fetch();
 
 if (!$job) { die("Job not found."); }
 
-// Check if they have already paid a base fee
 $hasInitialBoost = ($job['boost_amount'] >= 2.00);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $paymentAmount = 0;
-    $durationLabel = "";
 
     if (!$hasInitialBoost && isset($_POST['duration'])) {
         $duration = $_POST['duration'];
         switch ($duration) {
-            case '1day':  $paymentAmount = 2.00;  $durationLabel = "1 Day"; break;
-            case '1week': $paymentAmount = 5.00;  $durationLabel = "1 Week"; break;
-            case '1month':$paymentAmount = 15.00; $durationLabel = "1 Month"; break;
+            case '1day':  $paymentAmount = 2.00;  break;
+            case '1week': $paymentAmount = 5.00;  break;
+            case '1month':$paymentAmount = 15.00; break;
         }
     } elseif ($hasInitialBoost && isset($_POST['extra_amount'])) {
         $paymentAmount = floatval($_POST['extra_amount']);
-        $durationLabel = "Extra Rank Bonus";
     }
 
     if ($paymentAmount > 0) {
-        $newTotal = $job['boost_amount'] + $paymentAmount;
-        
-        // IMPORTANT: We set is_boosted = 1 here so it shows up in the priority list
-        $update = $db->prepare("UPDATE jobs SET boost_amount = ?, is_boosted = 1 WHERE id = ?");
-        $update->execute([$newTotal, $jobId]);
-        
-        $receipt = [
-            'type' => $durationLabel,
-            'paid' => $paymentAmount,
-            'total' => $newTotal,
-            'title' => $job['title']
-        ];
+        // Instead of updating the DB, we redirect to checkout using JS to avoid "Blank Page" errors
+        echo "<script>window.location.href='checkout.php?id=$jobId&amount=$paymentAmount';</script>";
+        exit;
     }
 }
 ?>
@@ -68,11 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="card border-success shadow text-center">
                         <div class="card-body">
                             <h2 class="text-success">Success! 🎉</h2>
-                            <p class="lead">Payment for <strong><?= $receipt['type'] ?></strong> received.</p>
-                            <div class="p-4 bg-light rounded mb-3">
-                                <p>Paid: $<?= number_format($receipt['paid'], 2) ?></p>
-                                <h4 class="text-primary">Total Rank Power: $<?= number_format($receipt['total'], 2) ?></h4>
-                            </div>
+                            <p class="lead">Payment received.</p>
                             <a href="profile.php" class="btn btn-primary">Return to Profile</a>
                         </div>
                     </div>
@@ -110,21 +94,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             <span class="badge bg-success rounded-pill">$15.00</span>
                                         </label>
                                     </div>
-                                    <button type="submit" class="btn btn-primary w-100 btn-lg">Pay & Activate Boost</button>
+                                    <button type="submit" class="btn btn-primary w-100 btn-lg">Go to Payment</button>
                                 </form>
 
                             <?php else: ?>
                                 <div class="text-center">
                                     <span class="badge bg-success mb-2">Boost Active</span>
                                     <h5>Current Rank Power: $<?= number_format($job['boost_amount'], 2) ?></h5>
-                                    <p class="small text-muted">Others can outbid you. Add an <strong>Extra Bonus</strong> to stay at the top.</p>
                                     <hr>
                                     <form method="POST">
                                         <div class="mb-3">
                                             <label class="form-label">Add Extra Bonus Amount ($)</label>
                                             <input type="number" name="extra_amount" step="0.01" min="0.01" class="form-control form-control-lg text-center" placeholder="1.00" required>
                                         </div>
-                                        <button type="submit" class="btn btn-success w-100">Pay Extra Bonus</button>
+                                        <button type="submit" class="btn btn-success w-100">Go to Payment</button>
                                     </form>
                                 </div>
                             <?php endif; ?>

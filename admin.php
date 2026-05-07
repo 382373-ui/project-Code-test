@@ -19,51 +19,66 @@ $totalApplications = $pdo->query("SELECT COUNT(*) FROM applications")->fetchColu
 
 $users = $pdo->query("
     SELECT id, username, email, role, is_verified, created_at
-    FROM users
-    ORDER BY created_at DESC
-    LIMIT 50
+    FROM users ORDER BY created_at DESC LIMIT 50
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $recentJobs = $pdo->query("
     SELECT j.id, j.title, j.category, j.is_active, j.date_posted, u.username AS poster
-    FROM jobs j
-    JOIN users u ON u.id = j.poster_user_id
-    ORDER BY j.date_posted DESC
-    LIMIT 20
+    FROM jobs j JOIN users u ON u.id = j.poster_user_id
+    ORDER BY j.date_posted DESC LIMIT 20
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $pendingFlags = $pdo->query("
     SELECT f.id, f.item_type, f.item_id, f.reason, f.created_at, u.username AS reporter
-    FROM flags f
-    JOIN users u ON u.id = f.reported_by
-    WHERE f.status = 'pending'
-    ORDER BY f.created_at DESC
+    FROM flags f JOIN users u ON u.id = f.reported_by
+    WHERE f.status = 'pending' ORDER BY f.created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
+
+// Monetization
+$monetizationExists = false;
+try {
+    $pdo->query("SELECT 1 FROM monetization_log LIMIT 1");
+    $monetizationExists = true;
+} catch (PDOException $e) {}
+
+$totalRevenue      = 0;
+$revenueByType     = [];
+$recentTransactions = [];
+if ($monetizationExists) {
+    $totalRevenue = $pdo->query("SELECT COALESCE(SUM(amount), 0) FROM monetization_log")->fetchColumn();
+    $revenueByType = $pdo->query("
+        SELECT type, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
+        FROM monetization_log GROUP BY type ORDER BY total DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    $recentTransactions = $pdo->query("
+        SELECT ml.id, ml.type, ml.amount, ml.description, ml.created_at, u.username
+        FROM monetization_log ml JOIN users u ON u.id = ml.user_id
+        ORDER BY ml.created_at DESC LIMIT 25
+    ")->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Boost revenue
+$boostRevenue = 0;
+try {
+    $boostRevenue = $pdo->query("SELECT COALESCE(SUM(boost_amount), 0) FROM jobs WHERE boost_amount > 0")->fetchColumn();
+} catch (PDOException $e) {}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['delete_user'])) {
-        $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
-        $stmt->execute([(int)$_POST['delete_user']]);
-        header("Location: admin.php");
-        exit;
+        $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([(int)$_POST['delete_user']]);
+        header("Location: admin.php"); exit;
     }
     if (isset($_POST['toggle_job'])) {
-        $stmt = $pdo->prepare("UPDATE jobs SET is_active = NOT is_active WHERE id = ?");
-        $stmt->execute([(int)$_POST['toggle_job']]);
-        header("Location: admin.php");
-        exit;
+        $pdo->prepare("UPDATE jobs SET is_active = NOT is_active WHERE id = ?")->execute([(int)$_POST['toggle_job']]);
+        header("Location: admin.php"); exit;
     }
     if (isset($_POST['delete_job'])) {
-        $stmt = $pdo->prepare("DELETE FROM jobs WHERE id = ?");
-        $stmt->execute([(int)$_POST['delete_job']]);
-        header("Location: admin.php");
-        exit;
+        $pdo->prepare("DELETE FROM jobs WHERE id = ?")->execute([(int)$_POST['delete_job']]);
+        header("Location: admin.php"); exit;
     }
     if (isset($_POST['resolve_flag'])) {
-        $stmt = $pdo->prepare("UPDATE flags SET status = 'resolved' WHERE id = ?");
-        $stmt->execute([(int)$_POST['resolve_flag']]);
-        header("Location: admin.php");
-        exit;
+        $pdo->prepare("UPDATE flags SET status = 'resolved' WHERE id = ?")->execute([(int)$_POST['resolve_flag']]);
+        header("Location: admin.php"); exit;
     }
 }
 ?>
@@ -75,19 +90,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Admin Dashboard – JobBridge</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="public/css/style.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        body { background: #f0f2f5; }
-        .sidebar { min-height: 100vh; background: #1a1a2e; color: #fff; width: 220px; position: fixed; top: 0; left: 0; padding-top: 20px; }
-        .sidebar a { color: #adb5bd; text-decoration: none; display: block; padding: 10px 20px; }
-        .sidebar a:hover, .sidebar a.active { background: #16213e; color: #fff; }
-        .sidebar .brand { font-size: 1.2rem; font-weight: bold; padding: 10px 20px 20px; color: #fff; border-bottom: 1px solid #333; margin-bottom: 10px; }
+        .sidebar { min-height: 100vh; background: #0a2540; color: #fff; width: 220px; position: fixed; top: 0; left: 0; padding-top: 20px; z-index: 100; }
+        .sidebar a { color: #adb5bd; text-decoration: none; display: block; padding: 10px 20px; transition: background 0.2s; }
+        .sidebar a:hover, .sidebar a.active { background: #1251a3; color: #fff; text-decoration: none; }
+        .sidebar .brand { font-size: 1.15rem; font-weight: bold; padding: 10px 20px 20px; color: #fff; border-bottom: 1px solid #1251a3; margin-bottom: 10px; }
         .main { margin-left: 220px; padding: 30px; }
-        .stat-card { border-radius: 12px; color: #fff; padding: 20px; }
         .section { display: none; }
         .section.active { display: block; }
     </style>
 </head>
-<body>
+<body style="background:#f0f4f8;">
 
 <div class="sidebar">
     <div class="brand"><i class="bi bi-shield-lock-fill me-2"></i>Admin Panel</div>
@@ -100,7 +115,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <span class="badge bg-danger ms-1"><?= count($pendingFlags) ?></span>
         <?php endif; ?>
     </a>
-    <hr style="border-color:#333;">
+    <a href="#" onclick="show('monetization', this)"><i class="bi bi-currency-dollar me-2"></i>Revenue</a>
+    <hr style="border-color:#1251a3;">
     <a href="index.php"><i class="bi bi-house me-2"></i>Back to Site</a>
 </div>
 
@@ -109,29 +125,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- OVERVIEW -->
     <div id="sec-overview" class="section active">
         <h3 class="mb-4">Dashboard Overview</h3>
-        <div class="row g-3 mb-5">
+        <div class="row g-3 mb-4">
             <div class="col-sm-6 col-xl-3">
                 <div class="stat-card bg-primary">
                     <div class="fs-2 fw-bold"><?= $totalUsers ?></div>
-                    <div>Total Users</div>
+                    <div><i class="bi bi-people me-1"></i>Total Users</div>
                 </div>
             </div>
             <div class="col-sm-6 col-xl-3">
                 <div class="stat-card bg-success">
                     <div class="fs-2 fw-bold"><?= $totalJobs ?></div>
-                    <div>Total Jobs</div>
+                    <div><i class="bi bi-briefcase me-1"></i>Total Jobs</div>
                 </div>
             </div>
             <div class="col-sm-6 col-xl-3">
                 <div class="stat-card bg-warning text-dark">
                     <div class="fs-2 fw-bold"><?= $totalMessages ?></div>
-                    <div>Total Messages</div>
+                    <div><i class="bi bi-chat me-1"></i>Messages</div>
                 </div>
             </div>
             <div class="col-sm-6 col-xl-3">
                 <div class="stat-card bg-info">
                     <div class="fs-2 fw-bold"><?= $totalApplications ?></div>
-                    <div>Applications</div>
+                    <div><i class="bi bi-file-text me-1"></i>Applications</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Revenue summary on overview -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-3 fw-bold text-success">$<?= number_format($totalRevenue, 2) ?></div>
+                        <div class="text-muted">Total Revenue (logged)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-3 fw-bold text-primary">$<?= number_format($boostRevenue, 2) ?></div>
+                        <div class="text-muted">Boost Revenue</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-3 fw-bold text-warning"><?= count($pendingFlags) ?></div>
+                        <div class="text-muted">Pending Flags</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -152,15 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="card-body p-0">
                 <table class="table table-hover mb-0">
                     <thead class="table-dark">
-                        <tr>
-                            <th>#</th>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Verified</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
-                        </tr>
+                        <tr><th>#</th><th>Username</th><th>Email</th><th>Role</th><th>Verified</th><th>Joined</th><th>Actions</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($users as $u): ?>
@@ -172,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <td><?= $u['is_verified'] ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>' ?></td>
                             <td><?= date('M j, Y', strtotime($u['created_at'])) ?></td>
                             <td>
-                                <form method="POST" style="display:inline" onsubmit="return confirm('Delete this user and all their data?')">
+                                <form method="POST" style="display:inline" onsubmit="return confirm('Delete this user?')">
                                     <input type="hidden" name="delete_user" value="<?= $u['id'] ?>">
                                     <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                                 </form>
@@ -192,15 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="card-body p-0">
                 <table class="table table-hover mb-0">
                     <thead class="table-dark">
-                        <tr>
-                            <th>#</th>
-                            <th>Title</th>
-                            <th>Category</th>
-                            <th>Posted By</th>
-                            <th>Date</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
+                        <tr><th>#</th><th>Title</th><th>Category</th><th>Posted By</th><th>Date</th><th>Status</th><th>Actions</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($recentJobs as $j): ?>
@@ -210,19 +238,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <td><span class="badge bg-secondary"><?= $j['category'] ?></span></td>
                             <td><?= htmlspecialchars($j['poster']) ?></td>
                             <td><?= date('M j, Y', strtotime($j['date_posted'])) ?></td>
-                            <td>
-                                <?php if ($j['is_active']): ?>
-                                    <span class="badge bg-success">Active</span>
-                                <?php else: ?>
-                                    <span class="badge bg-secondary">Inactive</span>
-                                <?php endif; ?>
-                            </td>
+                            <td><?= $j['is_active'] ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>' ?></td>
                             <td class="d-flex gap-1">
                                 <form method="POST" style="display:inline">
                                     <input type="hidden" name="toggle_job" value="<?= $j['id'] ?>">
-                                    <button class="btn btn-sm btn-outline-warning" title="Toggle active"><i class="bi bi-toggle-on"></i></button>
+                                    <button class="btn btn-sm btn-outline-warning"><i class="bi bi-toggle-on"></i></button>
                                 </form>
-                                <form method="POST" style="display:inline" onsubmit="return confirm('Delete this job?')">
+                                <form method="POST" style="display:inline" onsubmit="return confirm('Delete?')">
                                     <input type="hidden" name="delete_job" value="<?= $j['id'] ?>">
                                     <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                                 </form>
@@ -245,15 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="card-body p-0">
                 <table class="table table-hover mb-0">
                     <thead class="table-dark">
-                        <tr>
-                            <th>#</th>
-                            <th>Type</th>
-                            <th>Item ID</th>
-                            <th>Reported By</th>
-                            <th>Reason</th>
-                            <th>Date</th>
-                            <th>Action</th>
-                        </tr>
+                        <tr><th>#</th><th>Type</th><th>Item ID</th><th>Reported By</th><th>Reason</th><th>Date</th><th>Action</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($pendingFlags as $f): ?>
@@ -279,15 +293,131 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
     </div>
 
-</div>
+    <!-- MONETIZATION -->
+    <div id="sec-monetization" class="section">
+        <h3 class="mb-4">Revenue Dashboard</h3>
+
+        <!-- KPI Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-2 fw-bold text-success">$<?= number_format($totalRevenue, 2) ?></div>
+                        <div class="text-muted">Total Revenue</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-2 fw-bold text-primary">$<?= number_format($boostRevenue, 2) ?></div>
+                        <div class="text-muted">Boost Revenue (jobs)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-2 fw-bold text-info"><?= count($recentTransactions) ?></div>
+                        <div class="text-muted">Recent Transactions</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <?php if (!empty($revenueByType)): ?>
+        <!-- Revenue by Type + Chart -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header bg-primary text-white"><strong>Revenue by Type</strong></div>
+                    <div class="card-body p-0">
+                        <table class="table table-hover mb-0">
+                            <thead><tr><th>Type</th><th>Transactions</th><th>Total</th></tr></thead>
+                            <tbody>
+                                <?php foreach ($revenueByType as $r): ?>
+                                <tr>
+                                    <td><span class="badge bg-primary"><?= htmlspecialchars($r['type']) ?></span></td>
+                                    <td><?= $r['cnt'] ?></td>
+                                    <td class="fw-bold text-success">$<?= number_format($r['total'], 2) ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header bg-primary text-white"><strong>Revenue Breakdown</strong></div>
+                    <div class="card-body">
+                        <canvas id="revenueChart" height="160"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Recent Transactions -->
+        <div class="card">
+            <div class="card-header bg-primary text-white"><strong>Recent Transactions</strong></div>
+            <div class="card-body p-0">
+                <?php if (empty($recentTransactions)): ?>
+                    <div class="p-4 text-muted text-center">No transactions logged yet.</div>
+                <?php else: ?>
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr><th>#</th><th>User</th><th>Type</th><th>Amount</th><th>Description</th><th>Date</th></tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($recentTransactions as $t): ?>
+                        <tr>
+                            <td><?= $t['id'] ?></td>
+                            <td><?= htmlspecialchars($t['username']) ?></td>
+                            <td><span class="badge bg-primary"><?= htmlspecialchars($t['type']) ?></span></td>
+                            <td class="fw-bold text-success">$<?= number_format($t['amount'], 2) ?></td>
+                            <td><?= htmlspecialchars($t['description'] ?? '—') ?></td>
+                            <td><?= date('M j, Y', strtotime($t['created_at'])) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /main -->
 
 <script>
 function show(section, el) {
-    document.querySelectorAll('.section').forEach(function(s) { s.classList.remove('active'); });
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     document.getElementById('sec-' + section).classList.add('active');
-    document.querySelectorAll('.sidebar a').forEach(function(a) { a.classList.remove('active'); });
+    document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
     if (el) el.classList.add('active');
 }
+
+<?php if (!empty($revenueByType)): ?>
+// Revenue chart
+const ctx = document.getElementById('revenueChart');
+if (ctx) {
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: <?= json_encode(array_column($revenueByType, 'type')) ?>,
+            datasets: [{
+                data: <?= json_encode(array_map(fn($r) => round($r['total'], 2), $revenueByType)) ?>,
+                backgroundColor: ['#1976d2','#2196f3','#64b5f6','#bbdefb','#e3f2fd'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+}
+<?php endif; ?>
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
