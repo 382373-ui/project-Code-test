@@ -51,19 +51,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $age          = trim($_POST["age"]             ?? '');
     $is_public    = isset($_POST["is_public"])     ? 1 : 0;
     $tags         = trim($_POST["tags"]            ?? '');
+    $imgUrl       = trim($_POST["profile_img_url"] ?? '');
     $profileImg   = $user['profile_img'];
 
+    // Priority 1: file upload
     if (!empty($_FILES['profile_img']['name'])) {
         $uploadResult = uploadFile(
             $_FILES['profile_img'],
             "uploads/profiles/",
-            ['image/jpeg', 'image/png', 'image/gif'],
+            ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
             5 * 1024 * 1024
         );
         if (isset($uploadResult['error'])) {
             $errors[] = $uploadResult['error'];
         } else {
             $profileImg = $uploadResult['path'];
+        }
+    } elseif (!empty($imgUrl)) {
+        // Priority 2: URL
+        // Basic sanity check — must start with http/https and look like an image
+        if (filter_var($imgUrl, FILTER_VALIDATE_URL) &&
+            preg_match('/\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i', $imgUrl)) {
+            $profileImg = $imgUrl;
+        } else {
+            $errors[] = 'Image URL must be a valid URL ending in .jpg, .png, .gif, .webp, or .svg';
         }
     }
 
@@ -112,12 +123,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <div class="container mt-4">
     <div class="row">
 
-        <!-- Preview -->
+        <!-- Preview sidebar -->
         <div class="col-md-4">
             <div class="card text-center mb-3">
                 <div class="card-body">
-                    <img src="<?= htmlspecialchars($user['profile_img']) ?>"
-                         class="img-thumbnail mb-2 rounded-circle" style="width:130px;height:130px;object-fit:cover;" alt="Profile">
+                    <img id="imgPreview"
+                         src="<?= htmlspecialchars($user['profile_img']) ?>"
+                         class="img-thumbnail mb-2 rounded-circle"
+                         style="width:130px;height:130px;object-fit:cover;" alt="Profile">
                     <h5><?= htmlspecialchars($user['first_name'] . ' ' . $user['last_name']) ?></h5>
                     <p class="text-muted small">Preview</p>
                     <a href="profile.php" class="btn btn-outline-secondary btn-sm">Back to Profile</a>
@@ -139,7 +152,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <?php endif; ?>
         </div>
 
-        <!-- Form -->
+        <!-- Main form -->
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header bg-primary text-white"><h5 class="mb-0">Edit Profile</h5></div>
@@ -217,10 +230,48 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         </div>
                         <?php endif; ?>
 
+                        <!-- Profile Image section -->
                         <div class="mb-3">
-                            <label class="form-label">Profile Image</label>
-                            <input type="file" name="profile_img" class="form-control" accept="image/*">
-                            <small class="text-muted">Current: <?= htmlspecialchars($user['profile_img']) ?></small>
+                            <label class="form-label fw-semibold">Profile Image</label>
+
+                            <!-- Current image info -->
+                            <div class="mb-2 d-flex align-items-center gap-2">
+                                <small class="text-muted">Current:</small>
+                                <a href="<?= htmlspecialchars($user['profile_img']) ?>"
+                                   target="_blank"
+                                   class="small text-truncate"
+                                   style="max-width:280px;"
+                                   title="<?= htmlspecialchars($user['profile_img']) ?>">
+                                    <?= htmlspecialchars($user['profile_img']) ?>
+                                </a>
+                            </div>
+
+                            <!-- Tab toggle -->
+                            <ul class="nav nav-tabs mb-2" id="imgTab">
+                                <li class="nav-item">
+                                    <button type="button" class="nav-link active" id="tabUpload" onclick="switchImgTab('upload')">
+                                        <i class="bi bi-upload me-1"></i>Upload File
+                                    </button>
+                                </li>
+                                <li class="nav-item">
+                                    <button type="button" class="nav-link" id="tabUrl" onclick="switchImgTab('url')">
+                                        <i class="bi bi-link-45deg me-1"></i>Image URL
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div id="paneUpload">
+                                <input type="file" name="profile_img" id="fileInput" class="form-control" accept="image/*">
+                                <small class="text-muted">Max 5 MB. JPG, PNG, GIF, WebP accepted.</small>
+                            </div>
+
+                            <div id="paneUrl" style="display:none;">
+                                <input type="url" name="profile_img_url" id="urlInput"
+                                       class="form-control"
+                                       placeholder="https://example.com/photo.jpg"
+                                       value="">
+                                <small class="text-muted">Must end in .jpg, .png, .gif, .webp, or .svg</small>
+                            </div>
                         </div>
 
                         <div class="d-flex gap-2">
@@ -237,5 +288,43 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function switchImgTab(tab) {
+    const uploadPane = document.getElementById('paneUpload');
+    const urlPane    = document.getElementById('paneUrl');
+    const tabUpload  = document.getElementById('tabUpload');
+    const tabUrl     = document.getElementById('tabUrl');
+
+    if (tab === 'upload') {
+        uploadPane.style.display = '';
+        urlPane.style.display    = 'none';
+        tabUpload.classList.add('active');
+        tabUrl.classList.remove('active');
+        document.getElementById('urlInput').value = '';
+    } else {
+        uploadPane.style.display = 'none';
+        urlPane.style.display    = '';
+        tabUpload.classList.remove('active');
+        tabUrl.classList.add('active');
+        document.getElementById('fileInput').value = '';
+    }
+}
+
+// Live preview when a file is selected
+document.getElementById('fileInput').addEventListener('change', function () {
+    const file = this.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = e => document.getElementById('imgPreview').src = e.target.result;
+        reader.readAsDataURL(file);
+    }
+});
+
+// Live preview when a URL is typed
+document.getElementById('urlInput').addEventListener('input', function () {
+    const url = this.value.trim();
+    if (url) document.getElementById('imgPreview').src = url;
+});
+</script>
 </body>
 </html>

@@ -8,7 +8,6 @@ requireLogin();
 $db  = getDBConnection();
 $uid = getCurrentUserId();
 
-// Restrict to students only
 $roleStmt = $db->prepare("SELECT role FROM users WHERE id = ?");
 $roleStmt->execute([$uid]);
 $userRole = $roleStmt->fetchColumn();
@@ -21,20 +20,25 @@ if ($userRole !== 'student') {
 $message = '';
 $error   = '';
 
-// Handle Experience actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    // Add Experience
     if ($action === 'add_experience') {
-        $company   = trim($_POST['company']   ?? '');
-        $position  = trim($_POST['position']  ?? '');
+        $company   = trim($_POST['company']     ?? '');
+        $position  = trim($_POST['position']    ?? '');
         $start     = !empty($_POST['start_date'])  ? $_POST['start_date']  : null;
         $end       = !empty($_POST['end_date'])    ? $_POST['end_date']    : null;
         $isCurrent = isset($_POST['is_current']) ? 1 : 0;
         $desc      = trim($_POST['description'] ?? '');
 
-        if ($company && $position) {
+        // If not currently working, end date must not be in the future
+        if (!$isCurrent && $end && $end > date('Y-m-d')) {
+            $error = 'End date cannot be in the future when you are no longer working there.';
+        } elseif ($company && $position) {
+            // Clear end date if currently working
+            if ($isCurrent) {
+                $end = null;
+            }
             $stmt = $db->prepare("INSERT INTO experience (user_id, company, position, start_date, end_date, is_current, description) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$uid, $company, $position, $start, $end, $isCurrent, $desc]);
             $message = 'Experience entry added.';
@@ -43,7 +47,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Delete Experience
     if ($action === 'delete_experience') {
         $id = (int)$_POST['experience_id'];
         $stmt = $db->prepare("DELETE FROM experience WHERE id = ? AND user_id = ?");
@@ -51,7 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = 'Experience entry removed.';
     }
 
-    // Add Project
     if ($action === 'add_project') {
         $title = trim($_POST['title'] ?? '');
         $desc  = trim($_POST['description'] ?? '');
@@ -66,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Delete Project
     if ($action === 'delete_project') {
         $id = (int)$_POST['project_id'];
         $stmt = $db->prepare("DELETE FROM projects WHERE id = ? AND user_id = ?");
@@ -75,7 +76,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch existing data
 $expStmt = $db->prepare("SELECT * FROM experience WHERE user_id = ? ORDER BY start_date DESC");
 $expStmt->execute([$uid]);
 $experiences = $expStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -83,6 +83,8 @@ $experiences = $expStmt->fetchAll(PDO::FETCH_ASSOC);
 $projStmt = $db->prepare("SELECT * FROM projects WHERE user_id = ? ORDER BY created_at DESC");
 $projStmt->execute([$uid]);
 $projects = $projStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$today = date('Y-m-d');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -121,9 +123,9 @@ $projects = $projStmt->fetchAll(PDO::FETCH_ASSOC);
                 <i class="bi bi-plus"></i> Add
             </button>
         </div>
-        <div id="addExpForm" class="collapse">
+        <div id="addExpForm" class="collapse <?= $error ? 'show' : '' ?>">
             <div class="card-body border-bottom bg-light">
-                <form method="POST" class="row g-2">
+                <form method="POST" class="row g-2" id="expForm">
                     <input type="hidden" name="action" value="add_experience">
                     <div class="col-md-6">
                         <label class="form-label">Company *</label>
@@ -135,11 +137,12 @@ $projects = $projStmt->fetchAll(PDO::FETCH_ASSOC);
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Start Date</label>
-                        <input type="date" name="start_date" class="form-control">
+                        <input type="date" name="start_date" id="expStart" class="form-control" max="<?= $today ?>">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">End Date</label>
-                        <input type="date" name="end_date" class="form-control">
+                        <input type="date" name="end_date" id="expEnd" class="form-control" max="<?= $today ?>">
+                        <div class="invalid-feedback">End date cannot be in the future.</div>
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check mb-2">
@@ -254,5 +257,42 @@ $projects = $projStmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+    const today      = '<?= $today ?>';
+    const isCurrentCb = document.getElementById('isCurrent');
+    const endInput    = document.getElementById('expEnd');
+    const startInput  = document.getElementById('expStart');
+
+    function applyEndDateRules() {
+        if (isCurrentCb.checked) {
+            // Currently working — disable & clear end date
+            endInput.value    = '';
+            endInput.disabled = true;
+            endInput.removeAttribute('max');
+        } else {
+            // Not currently working — cap end date at today
+            endInput.disabled = false;
+            endInput.max      = today;
+        }
+    }
+
+    isCurrentCb.addEventListener('change', applyEndDateRules);
+    applyEndDateRules(); // run on page load
+
+    // Also keep start date from being in the future
+    startInput.max = today;
+
+    // Client-side validation before submit
+    document.getElementById('expForm').addEventListener('submit', function (e) {
+        if (!isCurrentCb.checked && endInput.value && endInput.value > today) {
+            endInput.classList.add('is-invalid');
+            e.preventDefault();
+        } else {
+            endInput.classList.remove('is-invalid');
+        }
+    });
+})();
+</script>
 </body>
 </html>

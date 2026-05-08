@@ -78,7 +78,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (isset($_POST['resolve_flag'])) {
         $pdo->prepare("UPDATE flags SET status = 'resolved' WHERE id = ?")->execute([(int)$_POST['resolve_flag']]);
-        header("Location: admin.php"); exit;
+        header("Location: admin.php#flags"); exit;
+    }
+    if (isset($_POST['warn_flag'])) {
+        // Mark the flag as reviewed (warning sent — no actual email in demo, just status change)
+        $pdo->prepare("UPDATE flags SET status = 'reviewed' WHERE id = ?")->execute([(int)$_POST['warn_flag']]);
+        header("Location: admin.php#flags"); exit;
+    }
+    if (isset($_POST['delete_flagged_item'])) {
+        $flagId = (int)$_POST['delete_flagged_item'];
+        // Fetch the flag so we know what to soft-delete
+        $flag = $pdo->prepare("SELECT item_type, item_id FROM flags WHERE id = ?");
+        $flag->execute([$flagId]);
+        $flagRow = $flag->fetch(PDO::FETCH_ASSOC);
+        if ($flagRow) {
+            if ($flagRow['item_type'] === 'job') {
+                $pdo->prepare("UPDATE jobs SET is_deleted = 1, is_active = 0 WHERE id = ?")->execute([(int)$flagRow['item_id']]);
+            } elseif ($flagRow['item_type'] === 'user') {
+                // Soft-disable: set a note in flags only — full user deletion is a separate admin action
+                $pdo->prepare("UPDATE users SET is_verified = 0 WHERE id = ?")->execute([(int)$flagRow['item_id']]);
+            } elseif ($flagRow['item_type'] === 'message') {
+                $pdo->prepare("DELETE FROM messages WHERE id = ?")->execute([(int)$flagRow['item_id']]);
+            }
+            $pdo->prepare("UPDATE flags SET status = 'resolved' WHERE id = ?")->execute([$flagId]);
+        }
+        header("Location: admin.php#flags"); exit;
     }
 }
 ?>
@@ -263,11 +287,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if (empty($pendingFlags)): ?>
             <div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>No pending flags.</div>
         <?php else: ?>
+        <div class="alert alert-secondary small mb-3 py-2">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Warn</strong> — marks the flag as reviewed and records a warning against the item.
+            <strong class="ms-2">Resolve</strong> — closes the flag with no further action.
+            <strong class="ms-2">Delete</strong> — soft-deletes the reported item (jobs hidden, users suspended, messages removed) and closes the flag.
+        </div>
         <div class="card">
             <div class="card-body p-0">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover mb-0 align-middle">
                     <thead class="table-dark">
-                        <tr><th>#</th><th>Type</th><th>Item ID</th><th>Reported By</th><th>Reason</th><th>Date</th><th>Action</th></tr>
+                        <tr><th>#</th><th>Type</th><th>Item ID</th><th>Reported By</th><th>Reason</th><th>Date</th><th>Actions</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($pendingFlags as $f): ?>
@@ -276,13 +306,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <td><span class="badge bg-warning text-dark"><?= $f['item_type'] ?></span></td>
                             <td><?= $f['item_id'] ?></td>
                             <td><?= htmlspecialchars($f['reporter']) ?></td>
-                            <td><?= htmlspecialchars($f['reason'] ?? '—') ?></td>
-                            <td><?= date('M j, Y', strtotime($f['created_at'])) ?></td>
+                            <td class="small"><?= htmlspecialchars($f['reason'] ?? '—') ?></td>
+                            <td class="small text-nowrap"><?= date('M j, Y', strtotime($f['created_at'])) ?></td>
                             <td>
-                                <form method="POST" style="display:inline">
-                                    <input type="hidden" name="resolve_flag" value="<?= $f['id'] ?>">
-                                    <button class="btn btn-sm btn-outline-success">Resolve</button>
-                                </form>
+                                <div class="d-flex gap-1 flex-nowrap">
+                                    <!-- WARN -->
+                                    <form method="POST">
+                                        <input type="hidden" name="warn_flag" value="<?= $f['id'] ?>">
+                                        <button class="btn btn-sm btn-outline-warning"
+                                                title="Issue a warning — marks flag as reviewed"
+                                                onclick="return confirm('Issue a warning for this flag?')">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Warn
+                                        </button>
+                                    </form>
+                                    <!-- RESOLVE -->
+                                    <form method="POST">
+                                        <input type="hidden" name="resolve_flag" value="<?= $f['id'] ?>">
+                                        <button class="btn btn-sm btn-outline-success"
+                                                title="Resolve with no further action">
+                                            <i class="bi bi-check-circle me-1"></i>Resolve
+                                        </button>
+                                    </form>
+                                    <!-- DELETE (soft) -->
+                                    <form method="POST">
+                                        <input type="hidden" name="delete_flagged_item" value="<?= $f['id'] ?>">
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                title="Soft-delete the reported item and close this flag"
+                                                onclick="return confirm('This will remove the reported <?= $f['item_type'] ?> (soft delete) and close the flag. Continue?')">
+                                            <i class="bi bi-trash me-1"></i>Delete
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>

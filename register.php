@@ -9,21 +9,29 @@ if (isLoggedIn()) {
 }
 
 $errors = [];
+$formData = [
+    'username'   => '',
+    'email'      => '',
+    'first_name' => '',
+    'last_name'  => '',
+    'role'       => 'student',
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = sanitizeInput($_POST['username'] ?? '');
-    $email = sanitizeInput($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $confirmPassword = $_POST['confirm_password'] ?? '';
-    $firstName = sanitizeInput($_POST['first_name'] ?? '');
-    $lastName = sanitizeInput($_POST['last_name'] ?? '');
-    $role = sanitizeInput($_POST['role'] ?? 'student');
+    $formData['username']   = sanitizeInput($_POST['username']   ?? '');
+    $formData['email']      = sanitizeInput($_POST['email']      ?? '');
+    $formData['first_name'] = sanitizeInput($_POST['first_name'] ?? '');
+    $formData['last_name']  = sanitizeInput($_POST['last_name']  ?? '');
+    $formData['role']       = sanitizeInput($_POST['role']       ?? 'student');
+    $password               = $_POST['password']         ?? '';
+    $confirmPassword        = $_POST['confirm_password'] ?? '';
 
-    if (empty($username) || empty($email) || empty($password) || empty($firstName) || empty($lastName)) {
+    if (empty($formData['username']) || empty($formData['email']) || empty($password) ||
+        empty($formData['first_name']) || empty($formData['last_name'])) {
         $errors[] = 'All fields are required.';
     }
 
-    if (!validateEmail($email)) {
+    if (!validateEmail($formData['email'])) {
         $errors[] = 'Invalid email address.';
     }
 
@@ -37,27 +45,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (empty($errors)) {
-        $db = getDBConnection();
-        
+        $db   = getDBConnection();
         $stmt = $db->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
-        $stmt->execute([$username, $email]);
-        
+        $stmt->execute([$formData['username'], $formData['email']]);
+
         if ($stmt->fetch()) {
             $errors[] = 'Username or email already exists.';
         } else {
             $hashedPassword = hashPassword($password);
-            
             $stmt = $db->prepare("INSERT INTO users (username, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, NOW())");
-            
-            if ($stmt->execute([$username, $email, $hashedPassword, $role])) {
+
+            if ($stmt->execute([$formData['username'], $formData['email'], $hashedPassword, $formData['role']])) {
                 $userId = $db->lastInsertId();
-                
-                $stmt = $db->prepare("INSERT INTO profiles (user_id, first_name, last_name) VALUES (?, ?, ?)");
-                $stmt->execute([$userId, $firstName, $lastName]);
-                
-                // REDIRECT TO LOGIN WITH SUCCESS PARAMETER
+                $stmt   = $db->prepare("INSERT INTO profiles (user_id, first_name, last_name) VALUES (?, ?, ?)");
+                $stmt->execute([$userId, $formData['first_name'], $formData['last_name']]);
                 redirect('login.php?registered=1');
-                exit; 
+                exit;
             } else {
                 $errors[] = 'Registration failed. Please try again.';
             }
@@ -76,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
     <?php include 'includes/header.php'; ?>
-    
+
     <div class="container mt-5">
         <div class="row justify-content-center">
             <div class="col-md-6">
@@ -85,59 +88,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <h3>Register for JobBridge</h3>
                     </div>
                     <div class="card-body">
+
                         <?php if (!empty($errors)): ?>
                             <div class="alert alert-danger">
                                 <ul class="mb-0">
                                     <?php foreach ($errors as $error): ?>
-                                        <li><?= $error ?></li>
+                                        <li><?= htmlspecialchars($error) ?></li>
                                     <?php endforeach; ?>
                                 </ul>
                             </div>
                         <?php endif; ?>
-                        
+
                         <form method="POST" action="">
+
                             <div class="mb-3">
                                 <label for="username" class="form-label">Username</label>
-                                <input type="text" class="form-control" id="username" name="username" required>
+                                <input type="text" class="form-control <?= !empty($errors) && empty($formData['username']) ? 'is-invalid' : '' ?>"
+                                       id="username" name="username"
+                                       value="<?= htmlspecialchars($formData['username']) ?>" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" required>
+                                <input type="email" class="form-control"
+                                       id="email" name="email"
+                                       value="<?= htmlspecialchars($formData['email']) ?>" required>
                             </div>
-                            
+
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label for="first_name" class="form-label">First Name</label>
-                                    <input type="text" class="form-control" id="first_name" name="first_name" required>
+                                    <input type="text" class="form-control"
+                                           id="first_name" name="first_name"
+                                           value="<?= htmlspecialchars($formData['first_name']) ?>" required>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="last_name" class="form-label">Last Name</label>
-                                    <input type="text" class="form-control" id="last_name" name="last_name" required>
+                                    <input type="text" class="form-control"
+                                           id="last_name" name="last_name"
+                                           value="<?= htmlspecialchars($formData['last_name']) ?>" required>
                                 </div>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="role" class="form-label">I am a:</label>
                                 <select class="form-select" id="role" name="role" required>
-                                    <option value="student">Student</option>
-                                    <option value="employer">Employer/Civilian</option>
+                                    <option value="student"  <?= $formData['role'] === 'student'   ? 'selected' : '' ?>>Student</option>
+                                    <option value="employer" <?= $formData['role'] === 'employer'  ? 'selected' : '' ?>>Employer / Civilian</option>
                                 </select>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="password" class="form-label">Password</label>
-                                <input type="password" class="form-control" id="password" name="password" required>
+                                <p class="text-muted small mb-1">Must be at least 8 characters with an uppercase letter, lowercase letter, number, and special character.</p>
+                                <input type="password" class="form-control" id="password" name="password" required autocomplete="new-password">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label for="confirm_password" class="form-label">Confirm Password</label>
-                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required autocomplete="new-password">
                             </div>
-                            
+
                             <button type="submit" class="btn btn-primary w-100">Register</button>
                         </form>
-                        
+
                         <div class="mt-3 text-center">
                             <p>Already have an account? <a href="login.php">Login here</a></p>
                         </div>
