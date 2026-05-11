@@ -2,6 +2,7 @@
 require_once 'includes/config.php';
 require_once 'includes/db.php';
 require_once 'includes/auth.php';
+require_once 'includes/ad_helper.php';
 
 $isLoggedIn = isset($_SESSION['user_id']);
 $pdo        = getDBConnection();
@@ -147,15 +148,8 @@ try {
     <p class="lead mb-0">Find jobs, internships, and volunteer work near you.</p>
 </div>
 
-<!-- Top Banner Ad -->
 <div class="container mt-3">
-    <div class="ad-slot text-center">
-        <span class="ad-label">Advertisement</span>
-        <!-- Replace with Google AdSense snippet or static banner -->
-        <div style="height:90px;display:flex;align-items:center;justify-content:center;color:#adb5bd;">
-            728×90 Leaderboard Ad
-        </div>
-    </div>
+<?php renderAd('in-feed', $pdo); ?>
 </div>
 
 <div class="container">
@@ -274,16 +268,7 @@ try {
         <?php endif; ?>
     </div>
 
-    <!-- Ad every 5 jobs -->
-    <?php if ($i % 5 === 4): ?>
-    <div class="ad-slot text-center">
-        <span class="ad-label">Advertisement</span>
-        <!-- Replace with Google AdSense in-feed unit -->
-        <div style="height:60px;display:flex;align-items:center;justify-content:center;color:#adb5bd;">
-            In-Feed Ad (468×60)
-        </div>
-    </div>
-    <?php endif; ?>
+    <?php if ($i > 0 && $i % 5 === 4): renderAd('in-feed', $pdo); endif; ?>
 
 <?php endforeach; ?>
 

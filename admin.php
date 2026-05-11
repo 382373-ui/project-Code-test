@@ -63,7 +63,36 @@ try {
     $boostRevenue = $pdo->query("SELECT COALESCE(SUM(boost_amount), 0) FROM jobs WHERE boost_amount > 0")->fetchColumn();
 } catch (PDOException $e) {}
 
+// Ad stats
+$allAds     = $pdo->query("SELECT * FROM ads ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$totalImpressions = array_sum(array_column($allAds, 'impressions'));
+$totalClicks      = array_sum(array_column($allAds, 'clicks'));
+$adRevenue        = round($totalImpressions * 0.002 + $totalClicks * 0.01, 2);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // ── AD MANAGEMENT ──────────────────────────────────────
+    if (isset($_POST['add_ad'])) {
+        $adTitle     = trim($_POST['ad_title']     ?? '');
+        $adPlacement = trim($_POST['ad_placement'] ?? 'banner');
+        $adImageUrl  = trim($_POST['ad_image_url'] ?? '');
+        $adClickUrl  = trim($_POST['ad_click_url'] ?? '');
+        $adStart     = !empty($_POST['ad_start']) ? $_POST['ad_start'] : null;
+        $adEnd       = !empty($_POST['ad_end'])   ? $_POST['ad_end']   : null;
+        if ($adTitle && $adImageUrl) {
+            $pdo->prepare("INSERT INTO ads (title, placement, image_url, click_url, is_active, start_date, end_date, impressions, clicks)
+                           VALUES (?, ?, ?, ?, 1, ?, ?, 0, 0)")
+                ->execute([$adTitle, $adPlacement, $adImageUrl, $adClickUrl, $adStart, $adEnd]);
+        }
+        header("Location: admin.php#ads"); exit;
+    }
+    if (isset($_POST['toggle_ad'])) {
+        $pdo->prepare("UPDATE ads SET is_active = NOT is_active WHERE id = ?")->execute([(int)$_POST['toggle_ad']]);
+        header("Location: admin.php#ads"); exit;
+    }
+    if (isset($_POST['delete_ad'])) {
+        $pdo->prepare("DELETE FROM ads WHERE id = ?")->execute([(int)$_POST['delete_ad']]);
+        header("Location: admin.php#ads"); exit;
+    }
     if (isset($_POST['delete_user'])) {
         $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([(int)$_POST['delete_user']]);
         header("Location: admin.php"); exit;
@@ -140,6 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
     </a>
     <a href="#" onclick="show('monetization', this)"><i class="bi bi-currency-dollar me-2"></i>Revenue</a>
+    <a href="#" onclick="show('ads', this)"><i class="bi bi-megaphone me-2"></i>Ads</a>
     <hr style="border-color:#1251a3;">
     <a href="index.php"><i class="bi bi-house me-2"></i>Back to Site</a>
 </div>
@@ -347,6 +377,195 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
     </div>
 
+    <!-- ADS MANAGEMENT -->
+    <div id="sec-ads" class="section">
+        <h3 class="mb-4">Ad Management <span class="badge bg-secondary"><?= count($allAds) ?></span></h3>
+
+        <!-- Ad KPI row -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-3 fw-bold text-primary"><?= number_format($totalImpressions) ?></div>
+                        <div class="text-muted small">Total Impressions</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-3 fw-bold text-info"><?= number_format($totalClicks) ?></div>
+                        <div class="text-muted small">Total Clicks</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-3 fw-bold text-success">$<?= number_format($adRevenue, 2) ?></div>
+                        <div class="text-muted small">Est. Ad Revenue</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <div class="fs-3 fw-bold text-warning"><?= count(array_filter($allAds, fn($a) => $a['is_active'])) ?></div>
+                        <div class="text-muted small">Active Ads</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add new ad form -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-plus-circle me-2"></i>Add New Ad</strong>
+                <button class="btn btn-light btn-sm" data-bs-toggle="collapse" data-bs-target="#addAdForm">
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+            </div>
+            <div id="addAdForm" class="collapse show">
+                <div class="card-body">
+                    <form method="POST" class="row g-3">
+                        <input type="hidden" name="add_ad" value="1">
+                        <div class="col-md-6">
+                            <label class="form-label">Ad Title *</label>
+                            <input name="ad_title" class="form-control" required placeholder="e.g. TechStart Hiring Interns">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Placement *</label>
+                            <select name="ad_placement" class="form-select" required>
+                                <option value="banner">Banner (top of page, 728×90)</option>
+                                <option value="in-feed">In-Feed (between jobs, 600×120)</option>
+                                <option value="sidebar">Sidebar (300×250)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Active dates (optional)</label>
+                            <div class="input-group input-group-sm">
+                                <input type="date" name="ad_start" class="form-control" placeholder="Start">
+                                <input type="date" name="ad_end"   class="form-control" placeholder="End">
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Image URL * <small class="text-muted">(direct link to .jpg/.png/.gif)</small></label>
+                            <input name="ad_image_url" type="url" class="form-control" required
+                                   placeholder="https://example.com/banner.jpg"
+                                   id="adImgUrlInput">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Click-through URL</label>
+                            <input name="ad_click_url" type="url" class="form-control"
+                                   placeholder="https://advertiser.com">
+                        </div>
+                        <!-- Live preview -->
+                        <div class="col-12" id="adPreviewWrap" style="display:none;">
+                            <label class="form-label text-muted small">Preview:</label>
+                            <img id="adImgPreview" src="" alt="Ad Preview"
+                                 style="max-width:100%;max-height:120px;border:1px solid #ddd;border-radius:6px;">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-plus-circle me-1"></i>Add Ad
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Existing ads table -->
+        <div class="card">
+            <div class="card-header bg-dark text-white"><strong>All Ads</strong></div>
+            <?php if (empty($allAds)): ?>
+                <div class="card-body text-muted text-center">No ads yet. Add one above.</div>
+            <?php else: ?>
+            <div class="card-body p-0">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Preview</th>
+                            <th>Title</th>
+                            <th>Placement</th>
+                            <th>Impressions</th>
+                            <th>Clicks</th>
+                            <th>Est. Revenue</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($allAds as $ad): ?>
+                        <?php
+                            $adEst = round($ad['impressions'] * 0.002 + $ad['clicks'] * 0.01, 2);
+                        ?>
+                        <tr>
+                            <td>
+                                <?php if ($ad['image_url']): ?>
+                                <img src="<?= htmlspecialchars($ad['image_url']) ?>"
+                                     alt="<?= htmlspecialchars($ad['title']) ?>"
+                                     style="height:40px;max-width:120px;object-fit:cover;border-radius:4px;border:1px solid #ddd;">
+                                <?php else: ?>
+                                <span class="text-muted small">No image</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="fw-semibold small"><?= htmlspecialchars($ad['title']) ?></div>
+                                <?php if ($ad['click_url']): ?>
+                                <a href="<?= htmlspecialchars($ad['click_url']) ?>" target="_blank"
+                                   class="text-muted small text-truncate d-block" style="max-width:150px;">
+                                    <?= htmlspecialchars($ad['click_url']) ?>
+                                </a>
+                                <?php endif; ?>
+                            </td>
+                            <td><span class="badge bg-secondary"><?= htmlspecialchars($ad['placement']) ?></span></td>
+                            <td class="text-center"><?= number_format($ad['impressions']) ?></td>
+                            <td class="text-center"><?= number_format($ad['clicks']) ?></td>
+                            <td class="fw-bold text-success">$<?= number_format($adEst, 2) ?></td>
+                            <td>
+                                <?php if ($ad['is_active']): ?>
+                                    <span class="badge bg-success">Active</span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary">Paused</span>
+                                <?php endif; ?>
+                                <?php if ($ad['start_date'] && $ad['end_date']): ?>
+                                <div class="text-muted" style="font-size:10px;">
+                                    <?= date('M j', strtotime($ad['start_date'])) ?> – <?= date('M j', strtotime($ad['end_date'])) ?>
+                                </div>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <form method="POST">
+                                        <input type="hidden" name="toggle_ad" value="<?= $ad['id'] ?>">
+                                        <button class="btn btn-sm btn-outline-warning" title="<?= $ad['is_active'] ? 'Pause' : 'Activate' ?>">
+                                            <i class="bi bi-<?= $ad['is_active'] ? 'pause' : 'play' ?>-fill"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" onsubmit="return confirm('Delete this ad?')">
+                                        <input type="hidden" name="delete_ad" value="<?= $ad['id'] ?>">
+                                        <button class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="alert alert-light border mt-3 small">
+            <i class="bi bi-info-circle me-1 text-primary"></i>
+            Revenue is estimated at <strong>$0.002 per impression</strong> and <strong>$0.01 per click</strong>.
+            Ads rotate randomly per placement. Clicks are tracked through <code>ad_click.php</code>.
+        </div>
+    </div>
+
     <!-- MONETIZATION -->
     <div id="sec-monetization" class="section">
         <h3 class="mb-4">Revenue Dashboard</h3>
@@ -449,6 +668,22 @@ function show(section, el) {
     document.getElementById('sec-' + section).classList.add('active');
     document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
     if (el) el.classList.add('active');
+}
+
+// Ad image URL live preview
+const adImgInput = document.getElementById('adImgUrlInput');
+if (adImgInput) {
+    adImgInput.addEventListener('input', function () {
+        const url   = this.value.trim();
+        const wrap  = document.getElementById('adPreviewWrap');
+        const img   = document.getElementById('adImgPreview');
+        if (url) {
+            img.src            = url;
+            wrap.style.display = '';
+        } else {
+            wrap.style.display = 'none';
+        }
+    });
 }
 
 <?php if (!empty($revenueByType)): ?>

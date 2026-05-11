@@ -78,6 +78,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$jobId, $workerId]);
         // Mark job as completed
         $db->prepare("UPDATE jobs SET is_active = 0 WHERE id = ?")->execute([$jobId]);
+
+        // ── 5% PLATFORM FEE ──────────────────────────────────────────
+        // Only charge a fee if the job has a pay amount set
+        $jobPay = (float)($job['pay'] ?? 0);
+        if ($jobPay > 0) {
+            $platformFee = round($jobPay * 0.05, 2);
+            $db->prepare(
+                "INSERT INTO monetization_log (user_id, type, amount, reference_id, description, created_at)
+                 VALUES (?, 'subscription', ?, ?, ?, NOW())"
+            )->execute([
+                $job['poster_user_id'],
+                $platformFee,
+                $jobId,
+                '5% platform fee — "' . $job['title'] . '" ($' . number_format($jobPay, 2) . ' job)'
+            ]);
+        }
+        // ─────────────────────────────────────────────────────────────
+
         // Notify worker
         $workerStmt = $db->prepare("SELECT email, username FROM users WHERE id = ?");
         $workerStmt->execute([$workerId]);
