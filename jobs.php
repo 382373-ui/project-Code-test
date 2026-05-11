@@ -125,6 +125,26 @@ try {
         $stmt->execute([$_SESSION['user_id']]);
         $savedJobIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
+
+    // Confirmation status per job (for the current user)
+    $myConfirmations = [];
+    if ($isLoggedIn && !empty($jobs)) {
+        $jobIds = array_column($jobs, 'id');
+        $in     = implode(',', array_fill(0, count($jobIds), '?'));
+        $stmt   = $pdo->prepare("
+            SELECT job_id, status FROM job_confirmations
+            WHERE job_id IN ($in)
+            ORDER BY id DESC
+        ");
+        $stmt->execute($jobIds);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            // keep highest-priority status per job
+            $existing = $myConfirmations[$row['job_id']] ?? null;
+            if (!$existing || $row['status'] === 'confirmed') {
+                $myConfirmations[$row['job_id']] = $row['status'];
+            }
+        }
+    }
 } catch (PDOException $e) {
     $error_message = "An error occurred: " . $e->getMessage();
 }
@@ -210,6 +230,17 @@ try {
                 </span>
             </div>
             <div class="d-flex align-items-center gap-2">
+                <?php
+                    $confStatus = $myConfirmations[$job['id']] ?? null;
+                    $confBadge  = '';
+                    if ($confStatus === 'confirmed') {
+                        $confBadge = '<span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>Confirmed</span>';
+                    } elseif ($confStatus === 'submitted') {
+                        $confBadge = '<span class="badge bg-primary"><i class="bi bi-clock me-1"></i>Proof Submitted</span>';
+                    } elseif ($confStatus === 'disputed') {
+                        $confBadge = '<span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Disputed</span>';
+                    }
+                ?>
                 <?php if ($isLoggedIn && $job['poster_user_id'] != $_SESSION['user_id']): ?>
                     <a href="chat.php?user_id=<?= $job['poster_user_id'] ?>&job_id=<?= $job['id'] ?>" class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-chat me-1"></i>Message
@@ -266,6 +297,20 @@ try {
             <i class="bi bi-flag me-1"></i>Report Issue
         </button>
         <?php endif; ?>
+
+        <!-- Confirmation status + View Details -->
+        <div class="d-flex align-items-center gap-2 mt-2 flex-wrap border-top pt-2">
+            <?php if ($confBadge): ?>
+                <?= $confBadge ?>
+            <?php else: ?>
+                <span class="badge bg-light text-muted border">
+                    <i class="bi bi-hourglass-split me-1"></i>Not Started
+                </span>
+            <?php endif; ?>
+            <a href="job-detail.php?id=<?= $job['id'] ?>" class="btn btn-sm btn-outline-secondary ms-auto">
+                <i class="bi bi-eye me-1"></i>View Details
+            </a>
+        </div>
     </div>
 
     <?php if ($i > 0 && $i % 5 === 4): renderAd('in-feed', $pdo); endif; ?>
