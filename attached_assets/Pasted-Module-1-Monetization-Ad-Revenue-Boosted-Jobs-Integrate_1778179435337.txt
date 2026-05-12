@@ -1,0 +1,92 @@
+Module 1: Monetization & Ad Revenue
+Boosted Jobs:
+Integrate Stripe/PayPal for payments.
+Logic: Boosts must expire after a set duration (1 day, 1 week, 1 month). Use a job_boosts table with expiry_date.
+Database: Store transaction receipts in the monetization_log table for auditing.
+UX: Display "Success" message showing the new boost_amount and duration upon completion.
+Ad Strategy:
+Placement: Replace placeholders with real ads in:
+jobs.php (between listings)
+index.php (sidebar)
+profile.php (top or bottom)
+Integration: Support Google AdSense (live) and static banner ads (testing).
+Logging: Track ad impressions in the monetization_log table.
+Admin Monetization Dashboard:
+Calculate Total Revenue (sum of all transactions).
+Filter revenue by type (boosts, ads, subscriptions).
+Display recent transactions (user, amount, type, date).
+(Optional) Use Chart.js to visualize trends and category earnings.
+Module 2: The Resume Engine & Privacy
+Resume Logic:
+Student Restriction: Restrict the "View Resume" feature to students only. Hide the button for non-students.
+Privacy: Add is_public column to profiles. Add toggle in edit-profile.php.
+Customization: Add searchable tags (e.g., "Python", "Customer Service").
+PDF Generation: Use TCPDF or DomPDF to allow "Download as PDF".
+Shareability: Create a public link: jobbridge.com/resume/username.
+Routing: Modify .htaccess to map resume/username to resume.php?username=X.
+Resume Editing:
+Create tables for experience and projects.
+Build edit-resume.php to allow CRUD (Create, Read, Update, Delete) for resume entries.
+Display structured data on resume.php only after verifying is_public status (unless logged in).
+Module 3: Dual-End Job Confirmation & Workflow
+System Logic: Both parties must confirm before a job is marked as "Complete."
+Database Updates:
+SQL
+ALTER TABLE job_confirmations 
+ADD COLUMN proof_file_ref VARCHAR(255),
+ADD COLUMN status ENUM('pending', 'submitted', 'confirmed', 'disputed') DEFAULT 'pending',
+ADD COLUMN poster_confirmed BOOLEAN DEFAULT FALSE;
+
+
+Workflow:
+Worker: Uploads photo/proof via confirm_job.php.
+Poster: Reviews and clicks "Confirm" to set poster_confirmed = 1.
+Dispute: Add "Report Issue" button in jobs.php to flag the job for admin review.
+Notifications: Use PHPMailer or mail() to send alerts on job confirmation or dispute.
+Module 4: Profile, Rating, & Security
+User Rating System:
+Polish the existing rating system.
+Add comments and ratings to both the Profile and the Job.
+Edit Profile Fix: Ensure resume logic is strictly for students.
+Security (Change Password):
+Create change-password.php.
+Logic: Verify current password password_verify(), hash new password password_hash().
+Handle errors (mismatched passwords, incorrect current password).
+Module 5: Global Styling
+Design: Update style.css for a consistent Blue theme (use various shades).
+Framework: Use Bootstrap for buttons, forms, and cards.
+Responsiveness: Ensure full compatibility for both mobile and desktop.
+
+Logic Visualizer: Dual-End Confirmation Flow
+
+Essential Code Snippets
+1. SQL Migration for Confirmation
+SQL
+ALTER TABLE job_confirmations 
+ADD COLUMN proof_file_ref VARCHAR(255),
+ADD COLUMN status ENUM('pending', 'submitted', 'confirmed', 'disputed') DEFAULT 'pending',
+ADD COLUMN poster_confirmed BOOLEAN DEFAULT FALSE;
+2. Change Password Logic
+PHP
+// Verification & Update
+if (password_verify($_POST['current_password'], $user_row['password'])) {
+    $new_hash = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+    $stmt->execute([$new_hash, $user_id]);
+    echo "Password updated successfully!";
+} else {
+    echo "Error: Current password incorrect.";
+}
+3. .htaccess URL Rewrite for Resumes
+Apache
+RewriteEngine On
+RewriteRule ^resume/([a-zA-Z0-9_-]+)$ resume.php?username=$1 [L,QSA]
+
+Checklist for Implementation
+DB Updates: Run all ALTER table commands first.
+Dependencies: Install DomPDF/TCPDF and PHPMailer via Composer.
+Monetization: Create the monetization_log table before building the dashboard.
+Security: Prioritize the change-password and is_public permission checks.
+Styling: Build the Blue theme layout using Bootstrap classes before deep-linking ads.
+
+

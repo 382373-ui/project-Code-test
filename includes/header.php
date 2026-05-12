@@ -1,8 +1,16 @@
-<?php 
+<?php
 require_once 'auth.php';
 if (!function_exists('isLoggedIn')) {
     require_once __DIR__ . '/auth.php';
 }
+
+// Load ad helper and get DB for banner ad
+require_once __DIR__ . '/ad_helper.php';
+$_adDb = null;
+try {
+    require_once __DIR__ . '/db.php';
+    $_adDb = getDBConnection();
+} catch (Exception $e) {}
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container">
@@ -50,3 +58,4 @@ if (!function_exists('isLoggedIn')) {
         </div>
     </div>
 </nav>
+<?php if ($_adDb): renderAd('banner', $_adDb); endif; ?>

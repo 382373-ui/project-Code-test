@@ -1,0 +1,8 @@
+RewriteEngine On
+
+# Route resume/username → resume.php?username=X
+RewriteRule ^resume/([a-zA-Z0-9_-]+)$ resume.php?username=$1 [L,QSA]
+
+# Remove trailing slashes
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)/$ /$1 [L,R=301]
